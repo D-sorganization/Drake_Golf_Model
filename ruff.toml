@@ -35,6 +35,16 @@ exclude = [
     "S101",
     "PLR2004", 
 ]
+# Drake model uses Drake-specific types that don't have stubs
+"drake_golf_model.py" = [
+    "ANN201",  # Missing return type annotations (Drake types complex)
+    "ANN001",  # Missing type annotations for arguments (Drake types)
+    "N806",    # Variable naming (X_WG, X_C_H are Drake conventions)
+    "E741",    # Ambiguous variable name I (inertia is standard)
+    "ARG001",  # Unused arguments (scene_graph may be used later)
+    "B008",    # Function call in defaults (GolfModelParams() is acceptable)
+    "RET504",  # Unnecessary assignment (readability)
+]
 
 [lint.mccabe]
 max-complexity = 10
