@@ -120,7 +120,7 @@ class GolfModelParams:
 
 def make_cylinder_inertia(
     mass: float, radius: float, length: float
-) -> SpatialInertia:  # type: ignore[no-any-return]
+) -> SpatialInertia:
     """
     Uniform solid cylinder aligned with +z, COM at origin.
     """
@@ -130,7 +130,7 @@ def make_cylinder_inertia(
 
 def add_body_with_inertia(
     plant: MultibodyPlant, name: str, params: SegmentParams  # type: ignore[no-untyped-def]
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     inertia = make_cylinder_inertia(params.mass, params.radius, params.length)
     body = plant.AddRigidBody(name, inertia)
     return body
@@ -138,7 +138,7 @@ def add_body_with_inertia(
 
 def add_free_base_with_hip(
     plant: MultibodyPlant, params: GolfModelParams  # type: ignore[no-untyped-def]
-) -> tuple[object, object]:  # type: ignore[no-any-return]
+) -> tuple[object, object]:
     """
     Adds a 6-DoF pelvis base (FreeJoint) and a revolute hip joint
     to a 'spine_base' body.
@@ -177,7 +177,7 @@ def add_spine_stack(
     plant: MultibodyPlant,  # type: ignore[no-untyped-def]
     spine_base: object,
     params: GolfModelParams,
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     """
     Universal + twist revolute -> upper torso hub.
     """
@@ -230,8 +230,8 @@ def add_spine_stack(
     upper_torso = plant.AddRigidBody("upper_torso_hub", hub_inertia)
 
     plant.WeldFrames(
-        upper_spine.body_frame(),
-        upper_torso.body_frame(),
+        upper_spine.body_frame(),  # type: ignore[attr-defined]
+        upper_torso.body_frame(),  # type: ignore[attr-defined]
         RigidTransform(p=[0.0, 0.0, params.pelvis_to_shoulders * 0.25]),
     )
 
@@ -243,7 +243,7 @@ def add_scapula_and_shoulder_chain(
     upper_torso: object,
     side: str,
     params: GolfModelParams,
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     """
     Scapula universal + rod, then 3-DOF shoulder (gimbal from 3 revolutes),
     then upper arm.
@@ -310,8 +310,8 @@ def add_scapula_and_shoulder_chain(
     upper_arm = add_body_with_inertia(plant, f"{side}_upper_arm", params.upper_arm)
 
     plant.WeldFrames(
-        roll_link.body_frame(),
-        upper_arm.body_frame(),
+        roll_link.body_frame(),  # type: ignore[attr-defined]
+        upper_arm.body_frame(),  # type: ignore[attr-defined]
         RigidTransform(p=[0.0, 0.0, -params.upper_arm.length / 2.0]),
     )
 
@@ -323,7 +323,7 @@ def add_elbow_and_forearm(
     upper_arm: object,
     side: str,
     params: GolfModelParams,
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     forearm = add_body_with_inertia(plant, f"{side}_forearm", params.forearm)
 
     axis = params.elbow_axis / np.linalg.norm(params.elbow_axis)
@@ -345,7 +345,7 @@ def add_wrist_and_hand(
     forearm: object,
     side: str,
     params: GolfModelParams,
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     hand = add_body_with_inertia(plant, f"{side}_hand", params.hand)
 
     a1 = params.wrist_axis_1 / np.linalg.norm(params.wrist_axis_1)
@@ -369,7 +369,7 @@ def add_club_with_dual_hand_constraints(
     left_hand: object,
     right_hand: object,
     params: GolfModelParams,
-) -> object:  # type: ignore[no-any-return]
+) -> object:
     """
     Create the club body and attach each hand to *different* points on the shaft
     using ball constraints.
@@ -396,17 +396,17 @@ def add_club_with_dual_hand_constraints(
 
     # Ball constraint: left hand <-> proximal point on club
     plant.AddBallConstraint(
-        frameA=left_hand.body_frame(),
+        frameA=left_hand.body_frame(),  # type: ignore[attr-defined]
         p_AP=p_left_hand,
-        frameB=club.body_frame(),
+        frameB=club.body_frame(),  # type: ignore[attr-defined]
         p_BQ=p_club_lead,
     )
 
     # Ball constraint: right hand <-> distal point on club
     plant.AddBallConstraint(
-        frameA=right_hand.body_frame(),
+        frameA=right_hand.body_frame(),  # type: ignore[attr-defined]
         p_AP=p_right_hand,
-        frameB=club.body_frame(),
+        frameB=club.body_frame(),  # type: ignore[attr-defined]
         p_BQ=p_club_trail,
     )
 
@@ -466,7 +466,7 @@ def add_joint_actuators(
 
 def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),  # type: ignore[no-untyped-def]
-) -> tuple[object, object, object]:  # type: ignore[no-any-return]
+) -> tuple[object, object, object]:
     """
     Builds the full multibody model + scene graph:
       - Free pelvis + hip
