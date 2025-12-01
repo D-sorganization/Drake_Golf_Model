@@ -538,10 +538,12 @@ class MATLABQualityChecker:
             checks = self.results.get("checks", {})
             if isinstance(checks, dict):
                 checks["matlab"] = matlab_results
+                self.results["checks"] = checks
         else:
             checks = self.results.get("checks", {})
             if isinstance(checks, dict):
                 checks["matlab"] = matlab_results
+                self.results["checks"] = checks
             if matlab_results.get("passed", False):
                 self.results["summary"] = (
                     f"[PASS] MATLAB quality checks PASSED "
