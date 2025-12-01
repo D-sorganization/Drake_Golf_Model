@@ -19,8 +19,9 @@ jobs:
     strategy:
       fail-fast: true  # ✅ Always include
       matrix:
-        # Note: numpy 2.1.0 requires Python >=3.10, so we test 3.10 and 3.11
-        python-version: ["3.10", "3.11"]
+        # Note: numpy 2.1.0 requires Python >=3.10, so we test 3.10, 3.11, and 3.12
+        # Python 3.9 is end-of-life (October 2025) and removed for security
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4

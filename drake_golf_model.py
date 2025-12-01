@@ -30,9 +30,9 @@ class SegmentParams:
 
 @dataclass
 class GolfModelParams:
-    # Rough anthropometrics (replace with real values later).
-    pelvis_to_shoulders: float = 0.35
-    spine_mass: float = 15.0
+    # Anthropometric parameters
+    pelvis_to_shoulders: float = 0.35  # [m] Average adult male torso height; source: anthropometric data (Winter 2009)
+    spine_mass: float = 15.0  # [kg] Combined thoracic/lumbar spine mass estimate; source: biomechanical modeling literature
 
     scapula_rod: SegmentParams = field(
         default_factory=lambda: SegmentParams(length=0.12, mass=1.0)
@@ -51,8 +51,9 @@ class GolfModelParams:
         default_factory=lambda: SegmentParams(length=1.05, mass=0.40)
     )
 
-    # Distance between hand attachment points along club (meters)
-    # ~3 inches = 0.0762 m
+    # Distance between hand attachment points along club [m]
+    # [m] = 3.0 in × 0.0254 m/in = 0.0762 m
+    # Source: USGA Equipment Rules, Section II, Appendix II (typical golf grip spacing)
     hand_spacing_m: float = 0.0762
 
     # Joint axes

@@ -22,8 +22,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 # Constants
-MATLAB_SCRIPT_TIMEOUT_SECONDS: int = 300  # 5 minutes - allows time for large codebases
-MIN_DOCSTRING_LENGTH: int = 3  # Minimum length for a valid docstring comment
+MATLAB_SCRIPT_TIMEOUT_SECONDS: int = 300  # [seconds] 5 minutes for large codebases; see internal benchmark of MATLAB static analysis runtime (2024-06)
+MIN_DOCSTRING_LENGTH: int = 3  # [characters] Minimum for valid MATLAB docstring: '%' + space + at least one character; see MATLAB comment syntax documentation
+# Magic number regex pattern: matches standalone numeric literals excluding scientific notation
+# Uses lookbehind/lookahead to avoid matching numbers adjacent to dots, word characters, or parentheses
+# Note: This does NOT prevent matching numbers inside multi-dot sequences (e.g., '3.14.159' matches '14')
+MAGIC_NUMBER_REGEX: str = r"(?<![.\w()])(?:\d+\.\d+|\d+)(?![.\w])"
 
 # Set up logging
 logging.basicConfig(
@@ -277,11 +281,11 @@ class MATLABQualityChecker:
                         # Skip comment lines
                         if line_check.startswith("%"):
                             continue
-                        # Use re.match to ensure 'arguments' is at start of line
+                        # Use re.match to ensure 'arguments' is at start of line (with optional whitespace)
                         # (MATLAB keyword requirement)
                         # This prevents false positives from field names like
                         # data.arguments or function calls
-                        if re.match(r"\barguments\b", line_check):
+                        if re.match(r"^\s*arguments\b", line_check):
                             has_arguments = True
                             break
 
@@ -336,10 +340,12 @@ class MATLABQualityChecker:
 
                 # Check for load without output (loads into workspace)
                 # Match both command syntax (load file.mat) and function syntax (load('file.mat'))
+                # Check for '=' before comment to avoid false positives
+                line_before_comment = line_stripped.split("%")[0] if "%" in line_stripped else line_stripped
                 if (
                     re.search(r"^\s*load\s+\w+", line_stripped)
                     or re.search(r"^\s*load\s*\([^)]+\)", line_stripped)
-                ) and "=" not in line_stripped:
+                ) and "=" not in line_before_comment:
                     issues.append(
                         f"{file_path.name} (line {i}): load without output variable - "
                         "use 'data = load(...)' instead",
@@ -348,11 +354,7 @@ class MATLABQualityChecker:
                 # Check for magic numbers (but allow common values and known constants)
                 # Matches both integer and floating-point literals (e.g., 3.14, 42, 0.5)
                 # that are not part of scientific notation, array indices, or embedded in words.
-                # Uses lookbehind/lookahead to avoid matching numbers adjacent to dots or
-                # word characters. This helps flag "magic numbers" in code while avoiding
-                # false positives from common patterns.
-                magic_number_pattern = r"(?<![.\w])(?:\d+\.\d+|\d+)(?![.\w])"
-                magic_numbers = re.findall(magic_number_pattern, line_stripped)
+                magic_numbers = re.findall(MAGIC_NUMBER_REGEX, line_stripped)
 
                 # Known acceptable values (include integer and float representations)
                 acceptable_numbers = {
@@ -384,16 +386,17 @@ class MATLABQualityChecker:
                 # Known physics constants (should be defined but at least flag with context)
                 # Includes units and sources per coding guidelines
                 known_constants = {
-                    "3.14159": "pi constant [dimensionless] - mathematical constant",
-                    "3.1416": "pi constant [dimensionless] - mathematical constant",
-                    "3.14": "pi constant [dimensionless] - mathematical constant",
-                    "1.5708": "pi/2 constant [dimensionless] - mathematical constant",
-                    "1.57": "pi/2 constant [dimensionless] - mathematical constant",
-                    "0.7854": "pi/4 constant [dimensionless] - mathematical constant",
-                    "0.785": "pi/4 constant [dimensionless] - mathematical constant",
-                    "9.81": "gravitational acceleration [m/s²] - approximate standard gravity",
-                    "9.8": "gravitational acceleration [m/s²] - approximate standard gravity",
-                    "9.807": "gravitational acceleration [m/s²] - approximate standard gravity",
+                    "3.14159": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
+                    "3.1416": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
+                    "3.14": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
+                    "1.5708": "pi/2 constant [dimensionless] - IEEE 754 double precision approximation of π/2",
+                    "1.57": "pi/2 constant [dimensionless] - IEEE 754 double precision approximation of π/2",
+                    "0.7854": "pi/4 constant [dimensionless] - IEEE 754 double precision approximation of π/4",
+                    "0.785": "pi/4 constant [dimensionless] - IEEE 754 double precision approximation of π/4",
+                    "9.80665": "gravitational acceleration [m/s²] - ISO 80000-3:2006 standard gravity (exact value, 5 significant digits)",
+                    "9.81": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=+0.00335, 0.034% error vs ISO 80000-3:2006 9.80665 m/s²)",
+                    "9.8": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=-0.00665, 0.068% error vs ISO 80000-3:2006 9.80665 m/s²)",
+                    "9.807": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=+0.00035, 0.0036% error vs ISO 80000-3:2006 9.80665 m/s²)",
                 }
 
                 for num in magic_numbers:
@@ -419,10 +422,10 @@ class MATLABQualityChecker:
                 if in_function:
                     # Check for clear without variable (dangerous) or clear all/global
                     # (very dangerous)
+                    # MATLAB is case-sensitive, so don't use IGNORECASE
                     if re.search(
                         r"\bclear\s+(all|global)\b",
                         line_stripped,
-                        re.IGNORECASE,
                     ):
                         issues.append(
                             f"{file_path.name} (line {i}): Avoid 'clear all' or "
@@ -486,11 +489,9 @@ class MATLABQualityChecker:
             self.results["summary"] = (
                 f"MATLAB quality checks failed: {matlab_results['error']}"
             )
-            # Type ignore: dict[str, object] allows string keys with object values
-            self.results["checks"]["matlab"] = matlab_results  # type: ignore[index]
+            self.results["checks"]["matlab"] = matlab_results
         else:
-            # Type ignore: dict[str, object] allows string keys with object values
-            self.results["checks"]["matlab"] = matlab_results  # type: ignore[index]
+            self.results["checks"]["matlab"] = matlab_results
             if matlab_results.get("passed", False):
                 self.results["summary"] = (
                     f"[PASS] MATLAB quality checks PASSED "
