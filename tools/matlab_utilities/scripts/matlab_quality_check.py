@@ -22,11 +22,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 # Constants
-MATLAB_SCRIPT_TIMEOUT_SECONDS: int = 300  # [seconds] 5 minutes for large codebases; see internal benchmark of MATLAB static analysis runtime (2024-06)
-MIN_DOCSTRING_LENGTH: int = 3  # [characters] Minimum for valid MATLAB docstring: '%' + space + at least one character; see MATLAB comment syntax documentation
+# [seconds] 5 minutes for large codebases;
+# see internal benchmark of MATLAB static analysis runtime (2024-06)
+MATLAB_SCRIPT_TIMEOUT_SECONDS: int = 300
+# [characters] Minimum for valid MATLAB docstring: '%' + space + at least one character;
+# see MATLAB comment syntax documentation
+MIN_DOCSTRING_LENGTH: int = 3
 # Magic number regex pattern: matches standalone numeric literals excluding scientific notation
-# Uses lookbehind/lookahead to avoid matching numbers adjacent to dots, word characters, or parentheses
-# Note: This does NOT prevent matching numbers inside multi-dot sequences (e.g., '3.14.159' matches '14')
+# Uses lookbehind/lookahead to avoid matching numbers adjacent to dots, word characters,
+# or parentheses
+# Note: This does NOT prevent matching numbers inside multi-dot sequences
+# (e.g., '3.14.159' matches '14')
 MAGIC_NUMBER_REGEX: str = r"(?<![.\w()])(?:\d+\.\d+|\d+)(?![.\w])"
 
 # Set up logging
@@ -281,8 +287,8 @@ class MATLABQualityChecker:
                         # Skip comment lines
                         if line_check.startswith("%"):
                             continue
-                        # Use re.match to ensure 'arguments' is at start of line (with optional whitespace)
-                        # (MATLAB keyword requirement)
+                        # Use re.match to ensure 'arguments' is at start of line
+                        # (with optional whitespace) (MATLAB keyword requirement)
                         # This prevents false positives from field names like
                         # data.arguments or function calls
                         if re.match(r"^\s*arguments\b", line_check):
@@ -339,9 +345,12 @@ class MATLABQualityChecker:
                     )
 
                 # Check for load without output (loads into workspace)
-                # Match both command syntax (load file.mat) and function syntax (load('file.mat'))
+                # Match both command syntax and function syntax
+                # Handles both command form and function call form
                 # Check for '=' before comment to avoid false positives
-                line_before_comment = line_stripped.split("%")[0] if "%" in line_stripped else line_stripped
+                line_before_comment = (
+                    line_stripped.split("%")[0] if "%" in line_stripped else line_stripped
+                )
                 if (
                     re.search(r"^\s*load\s+\w+", line_stripped)
                     or re.search(r"^\s*load\s*\([^)]+\)", line_stripped)
@@ -386,17 +395,54 @@ class MATLABQualityChecker:
                 # Known physics constants (should be defined but at least flag with context)
                 # Includes units and sources per coding guidelines
                 known_constants = {
-                    "3.14159": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
-                    "3.1416": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
-                    "3.14": "pi constant [dimensionless] - IEEE 754 double precision approximation of π",
-                    "1.5708": "pi/2 constant [dimensionless] - IEEE 754 double precision approximation of π/2",
-                    "1.57": "pi/2 constant [dimensionless] - IEEE 754 double precision approximation of π/2",
-                    "0.7854": "pi/4 constant [dimensionless] - IEEE 754 double precision approximation of π/4",
-                    "0.785": "pi/4 constant [dimensionless] - IEEE 754 double precision approximation of π/4",
-                    "9.80665": "gravitational acceleration [m/s²] - ISO 80000-3:2006 standard gravity (exact value, 5 significant digits)",
-                    "9.81": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=+0.00335, 0.034% error vs ISO 80000-3:2006 9.80665 m/s²)",
-                    "9.8": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=-0.00665, 0.068% error vs ISO 80000-3:2006 9.80665 m/s²)",
-                    "9.807": "gravitational acceleration [m/s²] - approximation of standard gravity (Δ=+0.00035, 0.0036% error vs ISO 80000-3:2006 9.80665 m/s²)",
+                    "3.14159": (
+                        "pi constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π"
+                    ),
+                    "3.1416": (
+                        "pi constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π"
+                    ),
+                    "3.14": (
+                        "pi constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π"
+                    ),
+                    "1.5708": (
+                        "pi/2 constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π/2"
+                    ),
+                    "1.57": (
+                        "pi/2 constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π/2"
+                    ),
+                    "0.7854": (
+                        "pi/4 constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π/4"
+                    ),
+                    "0.785": (
+                        "pi/4 constant [dimensionless] - "
+                        "IEEE 754 double precision approximation of π/4"
+                    ),
+                    "9.80665": (
+                        "gravitational acceleration [m/s²] - "
+                        "ISO 80000-3:2006 standard gravity "
+                        "(exact value, 5 significant digits)"
+                    ),
+                    "9.81": (
+                        "gravitational acceleration [m/s²] - "
+                        "approximation of standard gravity "
+                        "(Δ=+0.00335, 0.034% error vs ISO 80000-3:2006 9.80665 m/s²)"
+                    ),
+                    "9.8": (
+                        "gravitational acceleration [m/s²] - "
+                        "approximation of standard gravity "
+                        "(Δ=-0.00665, 0.068% error vs ISO 80000-3:2006 9.80665 m/s²)"
+                    ),
+                    "9.807": (
+                        "gravitational acceleration [m/s²] - "
+                        "approximation of standard gravity "
+                        "(Δ=+0.00035, 0.0036% error vs ISO 80000-3:2006 9.80665 m/s²)"
+                    ),
                 }
 
                 for num in magic_numbers:
