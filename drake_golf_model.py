@@ -129,7 +129,7 @@ def make_cylinder_inertia(
 
 
 def add_body_with_inertia(
-    plant: MultibodyPlant, name: str, params: SegmentParams  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant, name: str, params: SegmentParams
 ) -> object:
     inertia = make_cylinder_inertia(params.mass, params.radius, params.length)
     body = plant.AddRigidBody(name, inertia)
@@ -137,7 +137,7 @@ def add_body_with_inertia(
 
 
 def add_free_base_with_hip(
-    plant: MultibodyPlant, params: GolfModelParams  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant, params: GolfModelParams
 ) -> tuple[object, object]:
     """
     Adds a 6-DoF pelvis base (FreeJoint) and a revolute hip joint
@@ -174,7 +174,7 @@ def add_free_base_with_hip(
 
 
 def add_spine_stack(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
     spine_base: object,
     params: GolfModelParams,
 ) -> object:
@@ -230,8 +230,8 @@ def add_spine_stack(
     upper_torso = plant.AddRigidBody("upper_torso_hub", hub_inertia)
 
     plant.WeldFrames(
-        upper_spine.body_frame(),  # type: ignore[attr-defined]
-        upper_torso.body_frame(),  # type: ignore[attr-defined]
+        upper_spine.body_frame(),
+        upper_torso.body_frame(),
         RigidTransform(p=[0.0, 0.0, params.pelvis_to_shoulders * 0.25]),
     )
 
@@ -239,7 +239,7 @@ def add_spine_stack(
 
 
 def add_scapula_and_shoulder_chain(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
     upper_torso: object,
     side: str,
     params: GolfModelParams,
@@ -310,7 +310,7 @@ def add_scapula_and_shoulder_chain(
     upper_arm = add_body_with_inertia(plant, f"{side}_upper_arm", params.upper_arm)
 
     plant.WeldFrames(
-        roll_link.body_frame(),  # type: ignore[attr-defined]
+        roll_link.body_frame(),
         upper_arm.body_frame(),  # type: ignore[attr-defined]
         RigidTransform(p=[0.0, 0.0, -params.upper_arm.length / 2.0]),
     )
@@ -319,7 +319,7 @@ def add_scapula_and_shoulder_chain(
 
 
 def add_elbow_and_forearm(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
     upper_arm: object,
     side: str,
     params: GolfModelParams,
@@ -341,7 +341,7 @@ def add_elbow_and_forearm(
 
 
 def add_wrist_and_hand(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
     forearm: object,
     side: str,
     params: GolfModelParams,
@@ -365,7 +365,7 @@ def add_wrist_and_hand(
 
 
 def add_club_with_dual_hand_constraints(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
     left_hand: object,
     right_hand: object,
     params: GolfModelParams,
@@ -414,8 +414,8 @@ def add_club_with_dual_hand_constraints(
 
 
 def add_ground_and_club_contact(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
-    scene_graph: SceneGraph,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
+    scene_graph: SceneGraph,
     club: object,
     params: GolfModelParams,
 ) -> None:
@@ -446,7 +446,7 @@ def add_ground_and_club_contact(
 
 
 def add_joint_actuators(
-    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    plant: MultibodyPlant,
 ) -> None:
     """
     Add actuators for ALL joints in the plant.
@@ -465,7 +465,7 @@ def add_joint_actuators(
 
 
 def build_golf_swing_diagram(
-    params: GolfModelParams = GolfModelParams(),  # type: ignore[no-untyped-def]
+    params: GolfModelParams = GolfModelParams(),
 ) -> tuple[object, object, object]:
     """
     Builds the full multibody model + scene graph:
