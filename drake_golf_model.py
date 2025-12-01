@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 import numpy as np  # noqa: TID253
+import numpy.typing as npt  # noqa: TID253
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
     CoulombFriction,
@@ -60,27 +61,41 @@ class GolfModelParams:
     hand_spacing_m: float = 0.0762
 
     # Joint axes
-    hip_axis: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 1.0]))
-    spine_twist_axis: np.ndarray = field(
+    hip_axis: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([0.0, 0.0, 1.0])
+    )
+    spine_twist_axis: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.array([0.0, 0.0, 1.0])
     )
 
     # flex/extend
-    spine_universal_axis_1: np.ndarray = field(
+    spine_universal_axis_1: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.array([1.0, 0.0, 0.0])
     )
     # side-bend
-    spine_universal_axis_2: np.ndarray = field(
+    spine_universal_axis_2: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.array([0.0, 1.0, 0.0])
     )
 
-    scap_axis_1: np.ndarray = field(default_factory=lambda: np.array([1.0, 0.0, 0.0]))
-    scap_axis_2: np.ndarray = field(default_factory=lambda: np.array([0.0, 1.0, 0.0]))
+    scap_axis_1: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([1.0, 0.0, 0.0])
+    )
+    scap_axis_2: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([0.0, 1.0, 0.0])
+    )
 
-    wrist_axis_1: np.ndarray = field(default_factory=lambda: np.array([1.0, 0.0, 0.0]))
-    wrist_axis_2: np.ndarray = field(default_factory=lambda: np.array([0.0, 1.0, 0.0]))
+    wrist_axis_1: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([1.0, 0.0, 0.0])
+    )
+    wrist_axis_2: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([0.0, 1.0, 0.0])
+    )
 
-    shoulder_axes: tuple = field(
+    shoulder_axes: tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+    ] = field(
         default_factory=lambda: (
             np.array([0.0, 0.0, 1.0]),  # yaw
             np.array([0.0, 1.0, 0.0]),  # pitch
@@ -88,7 +103,9 @@ class GolfModelParams:
         )
     )
 
-    elbow_axis: np.ndarray = field(default_factory=lambda: np.array([0.0, 1.0, 0.0]))
+    elbow_axis: npt.NDArray[np.float64] = field(
+        default_factory=lambda: np.array([0.0, 1.0, 0.0])
+    )
 
     # Contact / ground
     ground_friction_mu_static: float = 0.8
@@ -101,7 +118,9 @@ class GolfModelParams:
 # -----------------------------
 
 
-def make_cylinder_inertia(mass: float, radius: float, length: float):
+def make_cylinder_inertia(
+    mass: float, radius: float, length: float
+) -> SpatialInertia:  # type: ignore[no-any-return]
     """
     Uniform solid cylinder aligned with +z, COM at origin.
     """
@@ -109,13 +128,17 @@ def make_cylinder_inertia(mass: float, radius: float, length: float):
     return SpatialInertia(mass, np.zeros(3), I * mass)
 
 
-def add_body_with_inertia(plant: MultibodyPlant, name: str, params: SegmentParams):
+def add_body_with_inertia(
+    plant: MultibodyPlant, name: str, params: SegmentParams  # type: ignore[no-untyped-def]
+) -> object:  # type: ignore[no-any-return]
     inertia = make_cylinder_inertia(params.mass, params.radius, params.length)
     body = plant.AddRigidBody(name, inertia)
     return body
 
 
-def add_free_base_with_hip(plant: MultibodyPlant, params: GolfModelParams):
+def add_free_base_with_hip(
+    plant: MultibodyPlant, params: GolfModelParams  # type: ignore[no-untyped-def]
+) -> tuple[object, object]:  # type: ignore[no-any-return]
     """
     Adds a 6-DoF pelvis base (FreeJoint) and a revolute hip joint
     to a 'spine_base' body.
@@ -150,7 +173,11 @@ def add_free_base_with_hip(plant: MultibodyPlant, params: GolfModelParams):
     return pelvis, spine_base
 
 
-def add_spine_stack(plant: MultibodyPlant, spine_base, params: GolfModelParams):
+def add_spine_stack(
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    spine_base: object,
+    params: GolfModelParams,
+) -> object:  # type: ignore[no-any-return]
     """
     Universal + twist revolute -> upper torso hub.
     """
@@ -212,8 +239,11 @@ def add_spine_stack(plant: MultibodyPlant, spine_base, params: GolfModelParams):
 
 
 def add_scapula_and_shoulder_chain(
-    plant: MultibodyPlant, upper_torso, side: str, params: GolfModelParams
-):
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    upper_torso: object,
+    side: str,
+    params: GolfModelParams,
+) -> object:  # type: ignore[no-any-return]
     """
     Scapula universal + rod, then 3-DOF shoulder (gimbal from 3 revolutes),
     then upper arm.
@@ -289,8 +319,11 @@ def add_scapula_and_shoulder_chain(
 
 
 def add_elbow_and_forearm(
-    plant: MultibodyPlant, upper_arm, side: str, params: GolfModelParams
-):
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    upper_arm: object,
+    side: str,
+    params: GolfModelParams,
+) -> object:  # type: ignore[no-any-return]
     forearm = add_body_with_inertia(plant, f"{side}_forearm", params.forearm)
 
     axis = params.elbow_axis / np.linalg.norm(params.elbow_axis)
@@ -308,8 +341,11 @@ def add_elbow_and_forearm(
 
 
 def add_wrist_and_hand(
-    plant: MultibodyPlant, forearm, side: str, params: GolfModelParams
-):
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    forearm: object,
+    side: str,
+    params: GolfModelParams,
+) -> object:  # type: ignore[no-any-return]
     hand = add_body_with_inertia(plant, f"{side}_hand", params.hand)
 
     a1 = params.wrist_axis_1 / np.linalg.norm(params.wrist_axis_1)
@@ -329,8 +365,11 @@ def add_wrist_and_hand(
 
 
 def add_club_with_dual_hand_constraints(
-    plant: MultibodyPlant, left_hand, right_hand, params: GolfModelParams
-):
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    left_hand: object,
+    right_hand: object,
+    params: GolfModelParams,
+) -> object:  # type: ignore[no-any-return]
     """
     Create the club body and attach each hand to *different* points on the shaft
     using ball constraints.
@@ -375,8 +414,11 @@ def add_club_with_dual_hand_constraints(
 
 
 def add_ground_and_club_contact(
-    plant: MultibodyPlant, scene_graph: SceneGraph, club, params: GolfModelParams
-):
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+    scene_graph: SceneGraph,  # type: ignore[no-untyped-def]
+    club: object,
+    params: GolfModelParams,
+) -> None:
     """
     Adds a ground half-space, and a spherical collision at the clubhead.
     """
@@ -403,7 +445,9 @@ def add_ground_and_club_contact(
     )
 
 
-def add_joint_actuators(plant: MultibodyPlant):
+def add_joint_actuators(
+    plant: MultibodyPlant,  # type: ignore[no-untyped-def]
+) -> None:
     """
     Add actuators for ALL joints in the plant.
     This makes it easy to use InverseDynamicsController.
@@ -420,7 +464,9 @@ def add_joint_actuators(plant: MultibodyPlant):
 # -----------------------------
 
 
-def build_golf_swing_diagram(params: GolfModelParams = GolfModelParams()):
+def build_golf_swing_diagram(
+    params: GolfModelParams = GolfModelParams(),  # type: ignore[no-untyped-def]
+) -> tuple[object, object, object]:  # type: ignore[no-any-return]
     """
     Builds the full multibody model + scene graph:
       - Free pelvis + hip

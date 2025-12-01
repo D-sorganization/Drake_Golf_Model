@@ -54,7 +54,7 @@ class MATLABQualityChecker:
         """
         self.project_root = project_root
         self.matlab_dir = project_root / "matlab"
-        self.results = {
+        self.results: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "total_files": 0,
             "issues": [],
@@ -535,9 +535,13 @@ class MATLABQualityChecker:
             self.results["summary"] = (
                 f"MATLAB quality checks failed: {matlab_results['error']}"
             )
-            self.results["checks"]["matlab"] = matlab_results
+            checks = self.results.get("checks", {})
+            if isinstance(checks, dict):
+                checks["matlab"] = matlab_results
         else:
-            self.results["checks"]["matlab"] = matlab_results
+            checks = self.results.get("checks", {})
+            if isinstance(checks, dict):
+                checks["matlab"] = matlab_results
             if matlab_results.get("passed", False):
                 self.results["summary"] = (
                     f"[PASS] MATLAB quality checks PASSED "
