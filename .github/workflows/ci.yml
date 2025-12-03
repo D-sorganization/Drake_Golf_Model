@@ -188,6 +188,7 @@ jobs:
         id: pre-commit
         continue-on-error: true  # Non-blocking
         run: |
+          set +e  # Allow command to fail without exiting immediately
           pre-commit run --all-files --show-diff-on-failure
           PRECOMMIT_EXIT_CODE=$?
           if [ $PRECOMMIT_EXIT_CODE -ne 0 ]; then
