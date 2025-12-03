@@ -317,43 +317,55 @@ jobs:
           fi
           
           # Approximations
-          if [ "${{ steps.approximations.outcome }}" == "success" ] || [ "${{ steps.approximations.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.approximations.outcome }}" == "success" ]; then
             echo "| No Approximations | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.approximations.outcome }}" == "skipped" ] || [ -z "${{ steps.approximations.outcome }}" ]; then
+            echo "| No Approximations | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| No Approximations | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Ruff
-          if [ "${{ steps.ruff.outcome }}" == "success" ] || [ "${{ steps.ruff.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.ruff.outcome }}" == "success" ]; then
             echo "| Ruff Linting | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.ruff.outcome }}" == "skipped" ] || [ -z "${{ steps.ruff.outcome }}" ]; then
+            echo "| Ruff Linting | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Ruff Linting | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # MyPy
-          if [ "${{ steps.mypy.outcome }}" == "success" ] || [ "${{ steps.mypy.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.mypy.outcome }}" == "success" ]; then
             echo "| MyPy Type Checking | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.mypy.outcome }}" == "skipped" ] || [ -z "${{ steps.mypy.outcome }}" ]; then
+            echo "| MyPy Type Checking | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| MyPy Type Checking | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Black
-          if [ "${{ steps.black.outcome }}" == "success" ] || [ "${{ steps.black.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.black.outcome }}" == "success" ]; then
             echo "| Black Formatting | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.black.outcome }}" == "skipped" ] || [ -z "${{ steps.black.outcome }}" ]; then
+            echo "| Black Formatting | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Black Formatting | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Pre-commit (non-blocking)
-          if [ "${{ steps.pre-commit.outcome }}" == "success" ] || [ "${{ steps.pre-commit.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.pre-commit.outcome }}" == "success" ]; then
             echo "| Pre-commit | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.pre-commit.outcome }}" == "skipped" ] || [ -z "${{ steps.pre-commit.outcome }}" ]; then
+            echo "| Pre-commit | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Pre-commit | ⚠️ (non-blocking) |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Tests
-          if [ "${{ steps.tests.outcome }}" == "success" ] || [ "${{ steps.tests.outcome }}" == "skipped" ]; then
+          if [ "${{ steps.tests.outcome }}" == "success" ]; then
             echo "| Tests + Coverage | ✅ |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.tests.outcome }}" == "skipped" ] || [ -z "${{ steps.tests.outcome }}" ]; then
+            echo "| Tests + Coverage | ⏭️ (skipped) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Tests + Coverage | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
