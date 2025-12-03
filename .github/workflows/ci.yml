@@ -111,7 +111,9 @@ jobs:
             --exclude-dir="tests" .; then
             echo "⚠️ WARNING: Possible magic numbers found (should be named constants with sources)"
             echo "Examples: 3.14→math.pi, 9.8→GRAVITY_M_S2, 2.71→math.e"
-            exit 1  # Fail to trigger warning indicator in summary
+            # Use exit 1 to mark this step as 'failed' in the GitHub Actions UI for visibility.
+            # continue-on-error: true above ensures this is a non-blocking warning and does not fail the job.
+            exit 1
           else
             echo "✅ No obvious magic numbers found"
           fi
