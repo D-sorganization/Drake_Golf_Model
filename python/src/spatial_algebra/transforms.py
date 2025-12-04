@@ -6,11 +6,12 @@ between different coordinate frames.
 """
 
 import numpy as np  # noqa: TID253
+import numpy.typing as npt  # noqa: TID253
 
 from .spatial_vectors import skew
 
 
-def xrot(e_rot: np.ndarray) -> np.ndarray:
+def xrot(e_rot: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Spatial coordinate transformation for pure rotation.
 
@@ -55,7 +56,7 @@ def xrot(e_rot: np.ndarray) -> np.ndarray:
     return np.block([[e_rot, np.zeros((3, 3))], [np.zeros((3, 3)), e_rot]])
 
 
-def xlt(r: np.ndarray) -> np.ndarray:
+def xlt(r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Spatial coordinate transformation for pure translation.
 
@@ -94,7 +95,7 @@ def xlt(r: np.ndarray) -> np.ndarray:
     return np.block([[np.eye(3), np.zeros((3, 3))], [-r_skew, np.eye(3)]])
 
 
-def xtrans(e_rot: np.ndarray, r: np.ndarray) -> np.ndarray:
+def xtrans(e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     General spatial coordinate transformation (Plücker transform).
 
@@ -143,7 +144,7 @@ def xtrans(e_rot: np.ndarray, r: np.ndarray) -> np.ndarray:
     return np.block([[e_rot, np.zeros((3, 3))], [-e_rot @ r_skew, e_rot]])
 
 
-def inv_xtrans(e_rot: np.ndarray, r: np.ndarray) -> np.ndarray:
+def inv_xtrans(e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Inverse of spatial coordinate transformation.
 

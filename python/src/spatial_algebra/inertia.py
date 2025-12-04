@@ -8,11 +8,12 @@ used in rigid body dynamics.
 from __future__ import annotations
 
 import numpy as np  # noqa: TID253
+import numpy.typing as npt  # noqa: TID253
 
 from .spatial_vectors import skew
 
 
-def mcI(mass: float, com: np.ndarray, I_com: np.ndarray) -> np.ndarray:
+def mcI(mass: float, com: npt.NDArray[np.float64], I_com: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Construct spatial inertia matrix from mass, COM, and rotational inertia.
 
@@ -71,7 +72,7 @@ def mcI(mass: float, com: np.ndarray, I_com: np.ndarray) -> np.ndarray:
     return np.block([[i_ref, mass * c_skew], [mass * c_skew.T, mass * np.eye(3)]])
 
 
-def transform_spatial_inertia(I_B: np.ndarray, X: np.ndarray) -> np.ndarray:
+def transform_spatial_inertia(I_B: npt.NDArray[np.float64], X: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Transform spatial inertia between frames.
 

@@ -7,6 +7,7 @@ import numpy.typing as npt  # noqa: TID253
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
     CoulombFriction,
+    Diagram,
     DiagramBuilder,
     HalfSpace,
     MultibodyPlant,
@@ -466,7 +467,7 @@ def add_joint_actuators(
 
 def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
-) -> tuple[object, object, object]:
+) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
     """
     Builds the full multibody model + scene graph:
       - Free pelvis + hip

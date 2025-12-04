@@ -8,9 +8,10 @@ following Featherstone's spatial vector algebra notation.
 from typing import Literal  # noqa: ICN003
 
 import numpy as np  # noqa: TID253
+import numpy.typing as npt  # noqa: TID253
 
 
-def skew(v: np.ndarray) -> np.ndarray:
+def skew(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Create 3x3 skew-symmetric matrix from 3x1 vector.
 
@@ -37,7 +38,7 @@ def skew(v: np.ndarray) -> np.ndarray:
     return np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
 
 
-def crm(v: np.ndarray) -> np.ndarray:
+def crm(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Spatial cross product operator for motion vectors.
 
@@ -80,7 +81,7 @@ def crm(v: np.ndarray) -> np.ndarray:
     return np.block([[w_skew, np.zeros((3, 3))], [v_skew, w_skew]])
 
 
-def crf(v: np.ndarray) -> np.ndarray:
+def crf(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """
     Spatial cross product operator for force vectors (dual).
 
@@ -125,10 +126,10 @@ def crf(v: np.ndarray) -> np.ndarray:
 
 
 def spatial_cross(
-    v: np.ndarray,
-    u: np.ndarray,
+    v: npt.NDArray[np.float64],
+    u: npt.NDArray[np.float64],
     cross_type: Literal["motion", "force"] = "motion",
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     """
     Compute spatial cross product.
 
@@ -168,7 +169,8 @@ def spatial_cross(
 
     if cross_type == "motion":
         return crm(v) @ u
-    if cross_type == "force":
+    elif cross_type == "force":
         return crf(v) @ u
+    # Runtime check for invalid cross_type (mypy sees this as unreachable due to Literal)
     msg = f"cross_type must be 'motion' or 'force', got '{cross_type}'"
     raise ValueError(msg)
