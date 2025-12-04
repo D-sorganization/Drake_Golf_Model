@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass, field
 
-import numpy as np  # noqa: TID253
-import numpy.typing as npt  # noqa: TID253
+import numpy as np
+import numpy.typing as npt
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
     CoulombFriction,
+    Diagram,
     DiagramBuilder,
     HalfSpace,
     MultibodyPlant,
@@ -118,9 +119,7 @@ class GolfModelParams:
 # -----------------------------
 
 
-def make_cylinder_inertia(
-    mass: float, radius: float, length: float
-) -> SpatialInertia:
+def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialInertia:
     """
     Uniform solid cylinder aligned with +z, COM at origin.
     """
@@ -131,6 +130,17 @@ def make_cylinder_inertia(
 def add_body_with_inertia(
     plant: MultibodyPlant, name: str, params: SegmentParams
 ) -> object:
+    """
+    Add a rigid body with cylindrical inertia to the multibody plant.
+
+    Args:
+        plant: MultibodyPlant to add the body to
+        name: Name of the body
+        params: Segment parameters containing mass, radius, and length
+
+    Returns:
+        The created rigid body object
+    """
     inertia = make_cylinder_inertia(params.mass, params.radius, params.length)
     body = plant.AddRigidBody(name, inertia)
     return body
@@ -324,6 +334,18 @@ def add_elbow_and_forearm(
     side: str,
     params: GolfModelParams,
 ) -> object:
+    """
+    Add forearm body and revolute elbow joint to the multibody plant.
+
+    Args:
+        plant: MultibodyPlant to add the forearm and joint to
+        upper_arm: Parent body (upper arm) to attach forearm to
+        side: Side identifier ('left' or 'right')
+        params: Golf model parameters containing forearm and elbow properties
+
+    Returns:
+        The created forearm body object
+    """
     forearm = add_body_with_inertia(plant, f"{side}_forearm", params.forearm)
 
     axis = params.elbow_axis / np.linalg.norm(params.elbow_axis)
@@ -346,6 +368,18 @@ def add_wrist_and_hand(
     side: str,
     params: GolfModelParams,
 ) -> object:
+    """
+    Add hand body and universal wrist joint to the multibody plant.
+
+    Args:
+        plant: MultibodyPlant to add the hand and joint to
+        forearm: Parent body (forearm) to attach hand to
+        side: Side identifier ('left' or 'right')
+        params: Golf model parameters containing hand and wrist properties
+
+    Returns:
+        The created hand body object
+    """
     hand = add_body_with_inertia(plant, f"{side}_hand", params.hand)
 
     a1 = params.wrist_axis_1 / np.linalg.norm(params.wrist_axis_1)
@@ -394,7 +428,7 @@ def add_club_with_dual_hand_constraints(
     p_left_hand = [0.0, 0.0, params.hand.length / 2.0]
     p_right_hand = [0.0, 0.0, params.hand.length / 2.0]
 
-    # Ball constraint: left hand <-> proximal point on club
+    # Ball constraint: left hand to proximal point on club
     plant.AddBallConstraint(
         frameA=left_hand.body_frame(),  # type: ignore[attr-defined]
         p_AP=p_left_hand,
@@ -402,7 +436,7 @@ def add_club_with_dual_hand_constraints(
         p_BQ=p_club_lead,
     )
 
-    # Ball constraint: right hand <-> distal point on club
+    # Ball constraint: right hand to distal point on club
     plant.AddBallConstraint(
         frameA=right_hand.body_frame(),  # type: ignore[attr-defined]
         p_AP=p_right_hand,
@@ -466,7 +500,7 @@ def add_joint_actuators(
 
 def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
-) -> tuple[object, object, object]:
+) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
     """
     Builds the full multibody model + scene graph:
       - Free pelvis + hip
