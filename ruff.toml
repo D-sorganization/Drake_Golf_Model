@@ -30,10 +30,20 @@ exclude = [
 "test_*.py" = [
     "S101",   # Use of assert
     "PLR2004", # Magic numbers allowed in tests
+    "N806",   # Variable naming (mathematical notation X, E, I_B, etc.)
 ]
 "**/tests/*.py" = [
     "S101",
-    "PLR2004", 
+    "PLR2004",
+    "N806",   # Variable naming (mathematical notation)
+]
+# Spatial algebra uses standard mathematical notation
+"**/spatial_algebra/*.py" = [
+    "RUF002",  # Mathematical symbols (×) in docstrings
+    "RUF003",  # Mathematical symbols (×) in comments
+    "N802",    # Function names (mcI is standard notation)
+    "N803",    # Argument names (I_com, I_B, X are standard)
+    "N806",    # Variable names (mathematical notation)
 ]
 # Drake model uses Drake-specific types that don't have stubs
 "drake_golf_model.py" = [
