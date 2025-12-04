@@ -7,8 +7,8 @@ following Featherstone's spatial vector algebra notation.
 
 from typing import Literal  # noqa: ICN003
 
-import numpy as np  # noqa: TID253
-import numpy.typing as npt  # noqa: TID253
+import numpy as np
+import numpy.typing as npt
 
 
 def skew(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:

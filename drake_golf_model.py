@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, field
 
-import numpy as np  # noqa: TID253
-import numpy.typing as npt  # noqa: TID253
+import numpy as np
+import numpy.typing as npt
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
     CoulombFriction,

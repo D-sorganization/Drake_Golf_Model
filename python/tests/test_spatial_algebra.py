@@ -4,7 +4,7 @@ Unit tests for spatial algebra module.
 Tests spatial vectors, transformations, and inertia operations.
 """
 
-import numpy as np  # noqa: TID253
+import numpy as np
 import pytest
 from src.spatial_algebra import (
     crf,

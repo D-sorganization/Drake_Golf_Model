@@ -7,7 +7,7 @@ Tests model building, parameter validation, and model structure.
 import sys
 from pathlib import Path
 
-import numpy as np  # noqa: TID253
+import numpy as np
 import pytest
 
 # Add parent directory to path to import drake_golf_model
