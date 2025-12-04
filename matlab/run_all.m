@@ -1,11 +1,23 @@
 // File: matlab/run_all.m
 function run_all()
     % Recreates key results end-to-end.
+    %
+    % This function runs all analyses and saves results to output directory.
+    %
+    % Outputs:
+    %   Creates output directory with metadata and analysis results.
+    
+    arguments
+        % No input arguments required
+    end
+    
     % 1) Configure reproducibility
     rng(42);
     % 2) Prepare output directory
     outdir = fullfile('output', datestr(datetime('now'),'yyyy-mm-dd'), 'baseline');
-    if ~exist(outdir, 'dir'); mkdir(outdir); end
+    if ~isfolder(outdir)
+        mkdir(outdir);
+    end
     % 3) Save metadata
     meta.date = datestr(datetime('now'));
     meta.matlab_version = version;

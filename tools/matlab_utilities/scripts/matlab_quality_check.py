@@ -349,7 +349,9 @@ class MATLABQualityChecker:
                 # Handles both command form and function call form
                 # Check for '=' before comment to avoid false positives
                 line_before_comment = (
-                    line_stripped.split("%")[0] if "%" in line_stripped else line_stripped
+                    line_stripped.split("%")[0]
+                    if "%" in line_stripped
+                    else line_stripped
                 )
                 if (
                     re.search(r"^\s*load\s+\w+", line_stripped)

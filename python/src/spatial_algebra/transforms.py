@@ -35,9 +35,11 @@ def xrot(e_rot: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     Example:
         >>> # 90 degree rotation about z-axis
         >>> theta = np.pi / 2
-        >>> e_rot = np.array([[np.cos(theta), -np.sin(theta), 0],
-        ...               [np.sin(theta),  np.cos(theta), 0],
-        ...               [0, 0, 1]])
+        >>> e_rot = np.array([
+        ...     [np.cos(theta), -np.sin(theta), 0],
+        ...     [np.sin(theta), np.cos(theta), 0],
+        ...     [0, 0, 1]
+        ... ])
         >>> x_transform = xrot(e_rot)
         >>> x_transform.shape
         (6, 6)
@@ -95,7 +97,9 @@ def xlt(r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return np.block([[np.eye(3), np.zeros((3, 3))], [-r_skew, np.eye(3)]])
 
 
-def xtrans(e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def xtrans(
+    e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
     """
     General spatial coordinate transformation (Plücker transform).
 

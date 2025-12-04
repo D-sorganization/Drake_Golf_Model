@@ -11,7 +11,9 @@ import numpy.typing as npt
 from .transforms import xlt, xrot
 
 
-def jcalc(jtype: str, q: float) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:  # noqa: PLR0915
+def jcalc(
+    jtype: str, q: float
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:  # noqa: PLR0915
     """
     Calculate joint transform and motion subspace.
 

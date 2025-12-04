@@ -119,9 +119,7 @@ class GolfModelParams:
 # -----------------------------
 
 
-def make_cylinder_inertia(
-    mass: float, radius: float, length: float
-) -> SpatialInertia:
+def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialInertia:
     """
     Uniform solid cylinder aligned with +z, COM at origin.
     """
