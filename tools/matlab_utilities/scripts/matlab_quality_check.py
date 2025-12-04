@@ -54,6 +54,11 @@ class MATLABQualityChecker:
         """
         self.project_root = project_root
         self.matlab_dir = project_root / "matlab"
+        # Also check tools directories for MATLAB files
+        self.tools_dirs = [
+            project_root / "tools" / "matlab_code_analyzer_gui",
+            project_root / "tools" / "matlab_utilities",
+        ]
         self.results: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "total_files": 0,
@@ -187,11 +192,19 @@ class MATLABQualityChecker:
         issues = []
         total_files = 0
 
-        # Analyze each MATLAB file
+        # Analyze MATLAB files in matlab directory
         for m_file in self.matlab_dir.rglob("*.m"):
             total_files += 1
             file_issues = self._analyze_matlab_file(m_file)
             issues.extend(file_issues)
+
+        # Also analyze MATLAB files in tools directories
+        for tools_dir in self.tools_dirs:
+            if tools_dir.exists():
+                for m_file in tools_dir.rglob("*.m"):
+                    total_files += 1
+                    file_issues = self._analyze_matlab_file(m_file)
+                    issues.extend(file_issues)
 
         self.results["total_files"] = total_files
         self.results["issues"] = issues
@@ -301,6 +314,8 @@ class MATLABQualityChecker:
                         )
 
                 # Check for banned patterns (in comments and code)
+                # Skip MATLAB suppression comments (%#ok<...>) - these are legitimate
+                is_matlab_suppression = re.search(r"%#ok<[A-Z0-9_]+>", line_stripped)
                 banned_patterns = [
                     (r"\bTODO\b", "TODO placeholder found"),
                     (r"\bFIXME\b", "FIXME placeholder found"),
@@ -311,6 +326,9 @@ class MATLABQualityChecker:
                 ]
 
                 for pattern, message in banned_patterns:
+                    # Skip angle bracket check for MATLAB suppression comments
+                    if message == "Angle bracket placeholder found" and is_matlab_suppression:
+                        continue
                     if re.search(pattern, line_stripped):
                         issues.append(f"{file_path.name} (line {i}): {message}")
 
