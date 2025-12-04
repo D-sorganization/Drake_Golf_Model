@@ -21,8 +21,11 @@ try:
         build_golf_swing_diagram,
         make_cylinder_inertia,
     )
-except ImportError:
-    pytest.skip("pydrake not available", allow_module_level=True)
+except ImportError as e:
+    # Skip all tests if pydrake is not available
+    import pytest
+
+    pytest.skip(f"pydrake not available: {e}", allow_module_level=True)
 
 
 class TestSegmentParams:
