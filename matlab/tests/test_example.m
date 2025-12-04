@@ -5,10 +5,6 @@ function tests = test_example()
     % Returns:
     %   tests: Test suite structure
     
-    arguments
-        % No input arguments required
-    end
-    
     tests = functiontests(localfunctions);
 end
 

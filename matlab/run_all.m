@@ -8,7 +8,7 @@ function run_all()
     %   Creates output directory with metadata and analysis results.
     
     arguments
-        % No input arguments required
+        % Function takes no input arguments
     end
     
     % 1) Configure reproducibility
