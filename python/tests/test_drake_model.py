@@ -12,12 +12,17 @@ import pytest
 
 # Add parent directory to path to import drake_golf_model
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from drake_golf_model import (
-    GolfModelParams,
-    SegmentParams,
-    build_golf_swing_diagram,
-    make_cylinder_inertia,
-)
+
+# Try to import drake_golf_model, skip all tests if pydrake is not available
+try:
+    from drake_golf_model import (
+        GolfModelParams,
+        SegmentParams,
+        build_golf_swing_diagram,
+        make_cylinder_inertia,
+    )
+except ImportError:
+    pytest.skip("pydrake not available", allow_module_level=True)
 
 
 class TestSegmentParams:
