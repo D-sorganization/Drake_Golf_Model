@@ -327,7 +327,10 @@ class MATLABQualityChecker:
 
                 for pattern, message in banned_patterns:
                     # Skip angle bracket check for MATLAB suppression comments
-                    if message == "Angle bracket placeholder found" and is_matlab_suppression:
+                    if (
+                        message == "Angle bracket placeholder found"
+                        and is_matlab_suppression
+                    ):
                         continue
                     if re.search(pattern, line_stripped):
                         issues.append(f"{file_path.name} (line {i}): {message}")
