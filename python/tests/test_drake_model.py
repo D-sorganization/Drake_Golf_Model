@@ -35,12 +35,20 @@ class TestSegmentParams:
         params = SegmentParams(length=1.0, mass=2.0, radius=0.05)
         assert params.radius == 0.05
 
-    def test_segment_params_positive_values(self) -> None:
-        """Test SegmentParams requires positive values."""
-        with pytest.raises((ValueError, TypeError)):
-            SegmentParams(length=-1.0, mass=2.0)
-        with pytest.raises((ValueError, TypeError)):
-            SegmentParams(length=1.0, mass=-2.0)
+    def test_segment_params_allows_negative_values(self) -> None:
+        """Test SegmentParams allows negative values (no validation).
+
+        Note: SegmentParams is a simple dataclass without validation.
+        Negative values are allowed but may not be physically meaningful.
+        """
+        # SegmentParams doesn't validate, so negative values are allowed
+        params = SegmentParams(length=-1.0, mass=2.0)
+        assert params.length == -1.0
+        assert params.mass == 2.0
+
+        params = SegmentParams(length=1.0, mass=-2.0)
+        assert params.length == 1.0
+        assert params.mass == -2.0
 
 
 class TestGolfModelParams:

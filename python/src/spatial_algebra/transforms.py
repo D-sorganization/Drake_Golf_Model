@@ -144,7 +144,10 @@ def xtrans(e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]) -> npt.ND
     return np.block([[e_rot, np.zeros((3, 3))], [-e_rot @ r_skew, e_rot]])
 
 
-def inv_xtrans(e_rot: npt.NDArray[np.float64], r: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def inv_xtrans(
+    e_rot: npt.NDArray[np.float64],
+    r: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     """
     Inverse of spatial coordinate transformation.
 

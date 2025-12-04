@@ -13,7 +13,11 @@ import numpy.typing as npt
 from .spatial_vectors import skew
 
 
-def mcI(mass: float, com: npt.NDArray[np.float64], I_com: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def mcI(
+    mass: float,
+    com: npt.NDArray[np.float64],
+    I_com: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     """
     Construct spatial inertia matrix from mass, COM, and rotational inertia.
 
@@ -48,7 +52,7 @@ def mcI(mass: float, com: npt.NDArray[np.float64], I_com: npt.NDArray[np.float64
     com = np.asarray(com).flatten()
     i_com = np.asarray(I_com)
 
-    if not isinstance(mass, (int, float)) or mass <= 0:  # noqa: UP038
+    if not isinstance(mass, int | float) or mass <= 0:
         msg = "mass must be positive scalar"
         raise ValueError(msg)
     if com.shape != (3,):
@@ -72,7 +76,10 @@ def mcI(mass: float, com: npt.NDArray[np.float64], I_com: npt.NDArray[np.float64
     return np.block([[i_ref, mass * c_skew], [mass * c_skew.T, mass * np.eye(3)]])
 
 
-def transform_spatial_inertia(I_B: npt.NDArray[np.float64], X: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def transform_spatial_inertia(
+    I_B: npt.NDArray[np.float64],
+    X: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     """
     Transform spatial inertia between frames.
 
