@@ -52,8 +52,8 @@ def mcI(
     com = np.asarray(com).flatten()
     i_com = np.asarray(I_com)
 
-    if not isinstance(mass, (int, float)) or mass <= 0:  # noqa: UP038
-        msg = "mass must be positive scalar"
+    if mass <= 0:
+        msg = f"mass must be positive scalar, got {mass}"
         raise ValueError(msg)
     if com.shape != (3,):
         msg = f"com must be 3x1 vector, got shape {com.shape}"

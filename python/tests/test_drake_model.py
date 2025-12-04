@@ -3,17 +3,11 @@
 Tests model building, parameter validation, and model structure.
 """
 
-# Import Drake model builder
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-# Add parent directory to path to import drake_golf_model
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 # Try to import drake_golf_model, skip all tests if pydrake is not available
+# Note: pythonpath is configured in pytest.ini to include the parent directory
 try:
     from drake_golf_model import (
         GolfModelParams,
