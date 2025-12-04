@@ -58,7 +58,7 @@ class TestSpatialCrossProducts:
         v = np.array([1, 0, 0, 0, 0, 0])
         u = np.array([0, 1, 0, 0, 0, 0])
         with pytest.raises(ValueError, match="cross_type must be"):
-            spatial_cross(v, u, "invalid")
+            spatial_cross(v, u, "invalid")  # type: ignore[arg-type]
 
     def test_crm_zero_velocity_returns_zero_matrix(self) -> None:
         """Test CRM returns zero matrix for zero velocity."""
