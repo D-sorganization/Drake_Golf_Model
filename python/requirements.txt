@@ -26,16 +26,19 @@ types-PyYAML==6.0.12.12
 # Modeling Stack (Pinocchio, Pink, Drake, QP solvers)
 # ============================================================================
 # Pinocchio - Analytical dynamics library
-pin>=2.6.0
+# Using compatible release constraint for stability while allowing patch updates
+pin~=2.6.0
 
 # Pink (pin-pink) - Stacked on top of Pinocchio for advanced kinematics
-pin-pink
+# Compatible with Pinocchio 2.6.x
+pin-pink~=1.3.0
 
 # Drake - Robot manipulation and control
-drake
+# Drake releases frequently, using compatible release for latest 1.x
+drake~=1.19.0
 
 # QP Solvers - Quadratic programming solvers
-qpsolvers
-osqp
-scs
-quadprog
+qpsolvers~=2.2.0
+osqp~=0.6.3
+scs~=3.2.4
+quadprog~=0.1.11
