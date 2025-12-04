@@ -171,6 +171,7 @@ def spatial_cross(
         return crm(v) @ u
     elif cross_type == "force":
         return crf(v) @ u
-    # Runtime check for invalid cross_type (mypy sees this as unreachable due to Literal)
+    # Runtime check for invalid cross_type
+    # Note: mypy flags this as unreachable due to Literal type, but it's needed for runtime safety
     msg = f"cross_type must be 'motion' or 'force', got '{cross_type}'"
-    raise ValueError(msg)
+    raise ValueError(msg)  # noqa: B011
