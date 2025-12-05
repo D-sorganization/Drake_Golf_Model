@@ -56,13 +56,13 @@ class TestJointCalculations:
 
     def test_zero_angle_revolute(self) -> None:
         """Test revolute joint at zero angle."""
-        xj_transform, s_subspace = jcalc("Rz", 0.0)
+        xj_transform, _ = jcalc("Rz", 0.0)
         # At zero angle, transform should be close to identity
         assert xj_transform.shape == (6, 6)
 
     def test_zero_displacement_prismatic(self) -> None:
         """Test prismatic joint at zero displacement."""
-        xj_transform, s_subspace = jcalc("Px", 0.0)
+        xj_transform, _ = jcalc("Px", 0.0)
         # At zero displacement, transform should be identity
         np.testing.assert_allclose(xj_transform, np.eye(6), atol=1e-10)
 
