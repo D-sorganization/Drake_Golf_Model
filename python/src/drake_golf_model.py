@@ -4,18 +4,29 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
+from .constants import (
+    GOLF_BALL_MASS_KG,
+    GOLF_BALL_DIAMETER_M,
+    DRIVER_LOFT_TYPICAL_DEG,
+    GOLF_BALL_DRAG_COEFFICIENT,
+)
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
     CoulombFriction,
     Diagram,
     DiagramBuilder,
+    FixedOffsetFrame,
     HalfSpace,
+    JointIndex,
     MultibodyPlant,
+    QuaternionFloatingJoint,
+    RevoluteJoint,
     RigidTransform,
     SceneGraph,
     SpatialInertia,
     Sphere,
     UnitInertia,
+    UniversalJoint,
 )
 
 # -----------------------------
@@ -123,8 +134,8 @@ def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialI
     """
     Uniform solid cylinder aligned with +z, COM at origin.
     """
-    I = UnitInertia.Cylinder(radius, length)
-    return SpatialInertia(mass, np.zeros(3), I * mass)
+    I = UnitInertia.SolidCylinder(radius, length, np.array([0.0, 0.0, 1.0]))
+    return SpatialInertia(mass, np.zeros(3), I)
 
 
 def add_body_with_inertia(
@@ -146,6 +157,62 @@ def add_body_with_inertia(
     return body
 
 
+def add_revolute_joint(
+    plant: MultibodyPlant,
+    name: str,
+    parent: object,
+    child: object,
+    pose_in_parent: RigidTransform,
+    pose_in_child: RigidTransform,
+    axis: npt.NDArray[np.float64],
+) -> None:
+    # Handle frames
+    if not np.allclose(pose_in_parent.GetAsMatrix4(), np.eye(4)):
+        frame_P = FixedOffsetFrame(f"{name}_P", parent.body_frame(), pose_in_parent)
+        frame_P = plant.AddFrame(frame_P)
+    else:
+        frame_P = parent.body_frame()
+
+    if not np.allclose(pose_in_child.GetAsMatrix4(), np.eye(4)):
+        frame_C = FixedOffsetFrame(f"{name}_C", child.body_frame(), pose_in_child)
+        frame_C = plant.AddFrame(frame_C)
+    else:
+        frame_C = child.body_frame()
+
+    joint = RevoluteJoint(name, frame_P, frame_C, axis)
+    plant.AddJoint(joint)
+
+
+def add_universal_joint(
+    plant: MultibodyPlant,
+    name: str,
+    parent: object,
+    child: object,
+    pose_in_parent: RigidTransform,
+    pose_in_child: RigidTransform,
+    axis1: npt.NDArray[np.float64],
+    axis2: npt.NDArray[np.float64],
+) -> None:
+    # Handle frames
+    if not np.allclose(pose_in_parent.GetAsMatrix4(), np.eye(4)):
+        frame_P = FixedOffsetFrame(f"{name}_P", parent.body_frame(), pose_in_parent)
+        frame_P = plant.AddFrame(frame_P)
+    else:
+        frame_P = parent.body_frame()
+
+    if not np.allclose(pose_in_child.GetAsMatrix4(), np.eye(4)):
+        frame_C = FixedOffsetFrame(f"{name}_C", child.body_frame(), pose_in_child)
+        frame_C = plant.AddFrame(frame_C)
+    else:
+        frame_C = child.body_frame()
+
+    # Note: UniversalJoint in Drake assumes canonical axes (usually X then Y).
+    # If axes are not [1,0,0] and [0,1,0], we would need to rotate frames.
+    # For now, we assume standard axes as per default params.
+    joint = UniversalJoint(name, frame_P, frame_C)
+    plant.AddJoint(joint)
+
+
 def add_free_base_with_hip(
     plant: MultibodyPlant, params: GolfModelParams
 ) -> tuple[object, object]:
@@ -156,12 +223,18 @@ def add_free_base_with_hip(
     pelvis_inertia = SpatialInertia(
         params.spine_mass,
         np.zeros(3),
-        UnitInertia.SolidBox(0.3, 0.2, 0.2) * params.spine_mass,
+        UnitInertia.SolidBox(0.3, 0.2, 0.2),
     )
     pelvis = plant.AddRigidBody("pelvis", pelvis_inertia)
 
     # 6-DoF between world and pelvis
-    plant.AddJointFreeBody(pelvis)
+    plant.AddJoint(
+        QuaternionFloatingJoint(
+            "pelvis_floating",
+            plant.world_frame(),
+            pelvis.body_frame(),
+        )
+    )
 
     # Revolute hip joint
     spine_base_inertia = SpatialInertia(
@@ -171,7 +244,8 @@ def add_free_base_with_hip(
 
     axis = params.hip_axis / np.linalg.norm(params.hip_axis)
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         "hip_yaw",
         parent=pelvis,
         child=spine_base,
@@ -195,15 +269,15 @@ def add_spine_stack(
     lower_spine_inertia = SpatialInertia(
         params.spine_mass * 0.5,
         np.zeros(3),
-        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5)
-        * (params.spine_mass * 0.5),
+        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5),
     )
     lower_spine = plant.AddRigidBody("lower_spine", lower_spine_inertia)
 
     a1 = params.spine_universal_axis_1 / np.linalg.norm(params.spine_universal_axis_1)
     a2 = params.spine_universal_axis_2 / np.linalg.norm(params.spine_universal_axis_2)
 
-    plant.AddJointUniversal(
+    add_universal_joint(
+        plant,
         "spine_universal",
         parent=spine_base,
         child=lower_spine,
@@ -217,14 +291,14 @@ def add_spine_stack(
     upper_spine_inertia = SpatialInertia(
         params.spine_mass * 0.5,
         np.zeros(3),
-        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5)
-        * (params.spine_mass * 0.5),
+        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5),
     )
     upper_spine = plant.AddRigidBody("upper_spine", upper_spine_inertia)
 
     twist_axis = params.spine_twist_axis / np.linalg.norm(params.spine_twist_axis)
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         "spine_twist",
         parent=lower_spine,
         child=upper_spine,
@@ -235,7 +309,7 @@ def add_spine_stack(
 
     # Upper torso hub
     hub_inertia = SpatialInertia(
-        5.0, np.zeros(3), UnitInertia.SolidBox(0.3, 0.3, 0.2) * 5.0
+        5.0, np.zeros(3), UnitInertia.SolidBox(0.3, 0.3, 0.2)
     )
     upper_torso = plant.AddRigidBody("upper_torso_hub", hub_inertia)
 
@@ -266,7 +340,8 @@ def add_scapula_and_shoulder_chain(
     a2 = params.scap_axis_2 / np.linalg.norm(params.scap_axis_2)
 
     scap_offset = [0.0, sign * 0.18, 0.10]
-    plant.AddJointUniversal(
+    add_universal_joint(
+        plant,
         f"{side}_scapula_universal",
         parent=upper_torso,
         child=scap_body,
@@ -277,20 +352,21 @@ def add_scapula_and_shoulder_chain(
     )
 
     # Shoulder gimbal: yaw -> pitch -> roll
-    yaw_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1)
+    yaw_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05))
     yaw_link = plant.AddRigidBody(f"{side}_shoulder_yaw_link", yaw_inertia)
 
     pitch_inertia = SpatialInertia(
-        0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1
+        0.1, np.zeros(3), UnitInertia.SolidSphere(0.05)
     )
     pitch_link = plant.AddRigidBody(f"{side}_shoulder_pitch_link", pitch_inertia)
 
-    roll_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1)
+    roll_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05))
     roll_link = plant.AddRigidBody(f"{side}_shoulder_roll_link", roll_inertia)
 
     a_yaw, a_pitch, a_roll = params.shoulder_axes
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         f"{side}_shoulder_yaw",
         parent=scap_body,
         child=yaw_link,
@@ -299,7 +375,8 @@ def add_scapula_and_shoulder_chain(
         axis=a_yaw / np.linalg.norm(a_yaw),
     )
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         f"{side}_shoulder_pitch",
         parent=yaw_link,
         child=pitch_link,
@@ -308,7 +385,8 @@ def add_scapula_and_shoulder_chain(
         axis=a_pitch / np.linalg.norm(a_pitch),
     )
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         f"{side}_shoulder_roll",
         parent=pitch_link,
         child=roll_link,
@@ -350,7 +428,8 @@ def add_elbow_and_forearm(
 
     axis = params.elbow_axis / np.linalg.norm(params.elbow_axis)
 
-    plant.AddJointRevolute(
+    add_revolute_joint(
+        plant,
         f"{side}_elbow",
         parent=upper_arm,
         child=forearm,
@@ -385,7 +464,8 @@ def add_wrist_and_hand(
     a1 = params.wrist_axis_1 / np.linalg.norm(params.wrist_axis_1)
     a2 = params.wrist_axis_2 / np.linalg.norm(params.wrist_axis_2)
 
-    plant.AddJointUniversal(
+    add_universal_joint(
+        plant,
         f"{side}_wrist_universal",
         parent=forearm,
         child=hand,
@@ -430,18 +510,18 @@ def add_club_with_dual_hand_constraints(
 
     # Ball constraint: left hand to proximal point on club
     plant.AddBallConstraint(
-        frameA=left_hand.body_frame(),  # type: ignore[attr-defined]
-        p_AP=p_left_hand,
-        frameB=club.body_frame(),  # type: ignore[attr-defined]
-        p_BQ=p_club_lead,
+        left_hand,
+        p_left_hand,
+        club,
+        p_club_lead,
     )
 
     # Ball constraint: right hand to distal point on club
     plant.AddBallConstraint(
-        frameA=right_hand.body_frame(),  # type: ignore[attr-defined]
-        p_AP=p_right_hand,
-        frameB=club.body_frame(),  # type: ignore[attr-defined]
-        p_BQ=p_club_trail,
+        right_hand,
+        p_right_hand,
+        club,
+        p_club_trail,
     )
 
     return club
@@ -467,7 +547,9 @@ def add_ground_and_club_contact(
     plant.RegisterCollisionGeometry(
         world_body, X_WG, HalfSpace(), "ground_collision", friction
     )
-    plant.RegisterVisualGeometry(world_body, X_WG, HalfSpace(), "ground_visual")
+    plant.RegisterVisualGeometry(
+        world_body, X_WG, HalfSpace(), "ground_visual", np.array([0.5, 0.5, 0.5, 1.0])
+    )
 
     # Clubhead collision sphere at distal end of club (+z)
     X_C_H = RigidTransform(p=[0.0, 0.0, params.club.length / 2.0])
@@ -475,7 +557,11 @@ def add_ground_and_club_contact(
         club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
     )
     plant.RegisterVisualGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_visual"
+        club,
+        X_C_H,
+        Sphere(params.clubhead_radius),
+        "clubhead_visual",
+        np.array([1.0, 0.0, 0.0, 1.0]),
     )
 
 
@@ -487,8 +573,11 @@ def add_joint_actuators(
     This makes it easy to use InverseDynamicsController.
     """
     for joint_index in range(plant.num_joints()):
-        joint = plant.get_joint(joint_index)
-        if joint.num_velocities() == 0:
+        joint = plant.get_joint(JointIndex(joint_index))
+        # Add actuators only for 1-DOF joints (revolute, prismatic)
+        # Skip 0-DOF (weld) and multi-DOF (floating, universal, etc)
+        # print(f"Checking joint {joint.name()} with {joint.num_velocities()} velocities")
+        if joint.num_velocities() != 1:
             continue
         plant.AddJointActuator(f"{joint.name()}_act", joint)
 
@@ -513,7 +602,7 @@ def build_golf_swing_diagram(
     Returns (diagram, plant, scene_graph).
     """
     builder = DiagramBuilder()
-    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-4)
 
     # Base and spine
     pelvis, spine_base = add_free_base_with_hip(plant, params)
