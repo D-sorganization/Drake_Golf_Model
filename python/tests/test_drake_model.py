@@ -104,6 +104,7 @@ class TestCylinderInertia:
 
     def test_make_cylinder_inertia_zero_mass(self) -> None:
         """Test cylinder inertia with zero mass raises error."""
+        # Drake throws error for zero mass in standard inertia creation
         try:
             with pytest.raises((ValueError, RuntimeError)):
                 make_cylinder_inertia(mass=0.0, radius=0.05, length=1.0)
