@@ -200,17 +200,13 @@ def add_spine_stack(
     )
     lower_spine = plant.AddRigidBody("lower_spine", lower_spine_inertia)
 
-    a1 = params.spine_universal_axis_1 / np.linalg.norm(params.spine_universal_axis_1)
-    a2 = params.spine_universal_axis_2 / np.linalg.norm(params.spine_universal_axis_2)
-
     plant.AddJointUniversal(
         "spine_universal",
         parent=spine_base,
         child=lower_spine,
         pose_in_parent=RigidTransform(),
         pose_in_child=RigidTransform(),
-        axis1=a1,
-        axis2=a2,
+        # axis1 and axis2 are fixed in Drake's UniversalJoint (x then y)
     )
 
     # Upper spine twist
@@ -429,6 +425,7 @@ def add_club_with_dual_hand_constraints(
     p_right_hand = [0.0, 0.0, params.hand.length / 2.0]
 
     # Ball constraint: left hand to proximal point on club
+    # Parameters: bodyA, p_AP (point on A), bodyB, p_BQ (point on B)
     plant.AddBallConstraint(
         frameA=left_hand.body_frame(),  # type: ignore[attr-defined]
         p_AP=p_left_hand,
