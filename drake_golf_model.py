@@ -200,9 +200,6 @@ def add_spine_stack(
     )
     lower_spine = plant.AddRigidBody("lower_spine", lower_spine_inertia)
 
-    a1 = params.spine_universal_axis_1 / np.linalg.norm(params.spine_universal_axis_1)
-    a2 = params.spine_universal_axis_2 / np.linalg.norm(params.spine_universal_axis_2)
-
     plant.AddJointUniversal(
         "spine_universal",
         parent=spine_base,
@@ -210,8 +207,6 @@ def add_spine_stack(
         pose_in_parent=RigidTransform(),
         pose_in_child=RigidTransform(),
         # axis1 and axis2 are fixed in Drake's UniversalJoint (x then y)
-        # axis1=a1,
-        # axis2=a2,
     )
 
     # Upper spine twist
