@@ -1,9 +1,11 @@
 # drake_golf_model.py
+"""Drake Golf Model URDF Generator and Diagram Builder."""
 
-import os
-import xml.etree.ElementTree as ET
+import logging
+import xml.etree.ElementTree as ET  # noqa: N817
 from dataclasses import dataclass, field
-from typing import Tuple, List, Optional
+from pathlib import Path
+from typing import Any  # noqa: ICN003
 from xml.dom import minidom
 
 import numpy as np
@@ -14,32 +16,34 @@ from pydrake.all import (
     Diagram,
     DiagramBuilder,
     HalfSpace,
+    JointIndex,
     MultibodyPlant,
     Parser,
     RigidTransform,
+    RollPitchYaw,
     SceneGraph,
     Sphere,
     UnitInertia,
-    RotationMatrix,
-    RollPitchYaw,
-    ModelInstanceIndex,
-    RotationalInertia,
-    FixedOffsetFrame,
-    JointIndex,
 )
 
 # -----------------------------
 # Parameter containers
 # -----------------------------
 
+
 @dataclass
 class SegmentParams:
+    """Parameters for a single body segment."""
+
     length: float
     mass: float
     radius: float = 0.03
 
+
 @dataclass
 class GolfModelParams:
+    """Parameters for the entire golf swing model."""
+
     # Anthropometric parameters
     # [m] Average adult male torso height; source: anthropometric data (Winter 2009)
     pelvis_to_shoulders: float = 0.35
@@ -96,7 +100,7 @@ class GolfModelParams:
     )
 
     # Shoulder gimbal: yaw -> pitch -> roll
-    shoulder_axes: Tuple[
+    shoulder_axes: tuple[
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
@@ -117,30 +121,38 @@ class GolfModelParams:
     ground_friction_mu_dynamic: float = 0.6
     clubhead_radius: float = 0.025  # m
 
+
 # -----------------------------
 # URDF Generation
 # -----------------------------
 
+
 class GolfURDFGenerator:
-    def __init__(self, params: GolfModelParams):
+    """Generates URDF for the golf swing model from parameters."""
+
+    def __init__(self, params: GolfModelParams) -> None:
+        """Initialize the generator with parameters."""
         self.params = params
         self.root = ET.Element("robot", name="golf_swing_model")
-        self.materials = set()
+        self.materials: set[str] = set()
         self.dummy_mass = 0.01
 
         # Add basic material
         self._add_material("gray", "0.5 0.5 0.5 1.0")
 
-    def _add_material(self, name: str, rgba: str):
+    def _add_material(self, name: str, rgba: str) -> None:
+        """Add a material definition to the URDF."""
         if name not in self.materials:
             mat = ET.SubElement(self.root, "material", name=name)
             ET.SubElement(mat, "color", rgba=rgba)
             self.materials.add(name)
 
     def _np_to_str(self, arr: npt.ArrayLike) -> str:
+        """Convert numpy array to space-separated string."""
         return " ".join(f"{x:.6g}" for x in np.array(arr).flatten())
 
-    def _transform_to_origin_xml(self, X: RigidTransform) -> ET.Element:
+    def _transform_to_origin_xml(self, X: RigidTransform) -> ET.Element:  # noqa: N803
+        """Convert RigidTransform to XML origin element."""
         origin = ET.Element("origin")
         p = X.translation()
         rpy = RollPitchYaw(X.rotation()).vector()
@@ -148,7 +160,10 @@ class GolfURDFGenerator:
         origin.set("rpy", self._np_to_str(rpy))
         return origin
 
-    def _create_inertia_xml(self, mass: float, unit_inertia: UnitInertia, com: npt.ArrayLike) -> ET.Element:
+    def _create_inertia_xml(
+        self, mass: float, unit_inertia: UnitInertia, com: npt.ArrayLike
+    ) -> ET.Element:
+        """Create inertial XML element."""
         inertial = ET.Element("inertial")
         ET.SubElement(inertial, "mass", value=f"{mass:.6g}")
 
@@ -158,8 +173,8 @@ class GolfURDFGenerator:
         inertial.append(origin)
 
         rot_inertia = unit_inertia * mass
-        moments = rot_inertia.get_moments() # Ixx, Iyy, Izz
-        products = rot_inertia.get_products() # Ixy, Ixz, Iyz
+        moments = rot_inertia.get_moments()  # Ixx, Iyy, Izz
+        products = rot_inertia.get_products()  # Ixy, Ixz, Iyz
 
         inertia_elem = ET.SubElement(inertial, "inertia")
         inertia_elem.set("ixx", f"{moments[0]:.6g}")
@@ -171,9 +186,16 @@ class GolfURDFGenerator:
 
         return inertial
 
-    def add_link(self, name: str, mass: float, unit_inertia: UnitInertia,
-                 visual_shape_tag: Optional[str] = None, visual_params: dict = None,
-                 com_offset: npt.ArrayLike = np.zeros(3)):
+    def add_link(  # noqa: PLR0913
+        self,
+        name: str,
+        mass: float,
+        unit_inertia: UnitInertia,
+        visual_shape_tag: str | None = None,
+        visual_params: dict[str, Any] | None = None,
+        com_offset: npt.ArrayLike = np.zeros(3),
+    ) -> ET.Element:
+        """Add a link to the model."""
         link = ET.SubElement(self.root, "link", name=name)
 
         # Inertial
@@ -182,26 +204,44 @@ class GolfURDFGenerator:
 
         # Visual/Collision
         if visual_shape_tag:
+            assert visual_params is not None  # noqa: S101
             for tag in ["visual", "collision"]:
                 vis = ET.SubElement(link, tag)
-                ET.SubElement(vis, "origin", xyz=self._np_to_str(com_offset), rpy="0 0 0")
+                ET.SubElement(
+                    vis, "origin", xyz=self._np_to_str(com_offset), rpy="0 0 0"
+                )
                 geom = ET.SubElement(vis, "geometry")
 
                 if visual_shape_tag == "box":
-                    ET.SubElement(geom, "box", size=self._np_to_str(visual_params['size']))
+                    ET.SubElement(
+                        geom, "box", size=self._np_to_str(visual_params["size"])
+                    )
                 elif visual_shape_tag == "cylinder":
-                    ET.SubElement(geom, "cylinder", length=str(visual_params['length']), radius=str(visual_params['radius']))
+                    ET.SubElement(
+                        geom,
+                        "cylinder",
+                        length=str(visual_params["length"]),
+                        radius=str(visual_params["radius"]),
+                    )
                 elif visual_shape_tag == "sphere":
-                    ET.SubElement(geom, "sphere", radius=str(visual_params['radius']))
+                    ET.SubElement(geom, "sphere", radius=str(visual_params["radius"]))
 
                 if tag == "visual":
                     ET.SubElement(vis, "material", name="gray")
 
         return link
 
-    def add_joint(self, name: str, type: str, parent: str, child: str,
-                  origin_transform: RigidTransform, axis: npt.ArrayLike = None):
-        joint = ET.SubElement(self.root, "joint", name=name, type=type)
+    def add_joint(  # noqa: PLR0913
+        self,
+        name: str,
+        joint_type: str,
+        parent: str,
+        child: str,
+        origin_transform: RigidTransform,
+        axis: npt.ArrayLike | None = None,
+    ) -> None:
+        """Add a joint to the model."""
+        joint = ET.SubElement(self.root, "joint", name=name, type=joint_type)
         ET.SubElement(joint, "parent", link=parent)
         ET.SubElement(joint, "child", link=child)
 
@@ -210,48 +250,81 @@ class GolfURDFGenerator:
         if axis is not None:
             ET.SubElement(joint, "axis", xyz=self._np_to_str(axis))
 
-    def generate(self) -> str:
+    def generate(self) -> str:  # noqa: PLR0915
+        """Generate the URDF string."""
         p = self.params
 
         # 1. Pelvis
         pelvis_dims = np.array([0.3, 0.2, 0.2])
         I_pelvis = UnitInertia.SolidBox(pelvis_dims[0], pelvis_dims[1], pelvis_dims[2])
-        self.add_link("pelvis", p.spine_mass, I_pelvis, "box", {'size': pelvis_dims})
+        self.add_link("pelvis", p.spine_mass, I_pelvis, "box", {"size": pelvis_dims})
 
         # 2. Spine Base (Hip Joint)
         sb_dims = np.array([0.1, 0.1, 0.1])
         I_sb = UnitInertia.SolidBox(sb_dims[0], sb_dims[1], sb_dims[2])
-        self.add_link("spine_base", 1.0, I_sb, "box", {'size': sb_dims})
-        self.add_joint("hip_yaw", "revolute", "pelvis", "spine_base", RigidTransform(), p.hip_axis)
+        self.add_link("spine_base", 1.0, I_sb, "box", {"size": sb_dims})
+        self.add_joint(
+            "hip_yaw", "revolute", "pelvis", "spine_base", RigidTransform(), p.hip_axis
+        )
 
         # 3. Lower Spine
         ls_dims = np.array([0.2, 0.2, p.pelvis_to_shoulders * 0.5])
         I_ls = UnitInertia.SolidBox(ls_dims[0], ls_dims[1], ls_dims[2])
         self.add_link("spine_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
-        self.add_link("lower_spine", p.spine_mass * 0.5, I_ls, "box", {'size': ls_dims})
+        self.add_link("lower_spine", p.spine_mass * 0.5, I_ls, "box", {"size": ls_dims})
 
-        self.add_joint("spine_universal_1", "revolute", "spine_base", "spine_dummy",
-                       RigidTransform(), p.spine_universal_axis_1)
-        self.add_joint("spine_universal_2", "revolute", "spine_dummy", "lower_spine",
-                       RigidTransform(), p.spine_universal_axis_2)
+        self.add_joint(
+            "spine_universal_1",
+            "revolute",
+            "spine_base",
+            "spine_dummy",
+            RigidTransform(),
+            p.spine_universal_axis_1,
+        )
+        self.add_joint(
+            "spine_universal_2",
+            "revolute",
+            "spine_dummy",
+            "lower_spine",
+            RigidTransform(),
+            p.spine_universal_axis_2,
+        )
 
         # 4. Upper Spine
         us_dims = np.array([0.2, 0.2, p.pelvis_to_shoulders * 0.5])
         I_us = UnitInertia.SolidBox(us_dims[0], us_dims[1], us_dims[2])
         us_offset = np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.25])
-        self.add_link("upper_spine", p.spine_mass * 0.5, I_us, "box", {'size': us_dims}, com_offset=us_offset)
+        self.add_link(
+            "upper_spine",
+            p.spine_mass * 0.5,
+            I_us,
+            "box",
+            {"size": us_dims},
+            com_offset=us_offset,
+        )
 
-        self.add_joint("spine_twist", "revolute", "lower_spine", "upper_spine",
-                       RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.25]), p.spine_twist_axis)
+        self.add_joint(
+            "spine_twist",
+            "revolute",
+            "lower_spine",
+            "upper_spine",
+            RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.25]),
+            p.spine_twist_axis,
+        )
 
         # Torso Hub
         hub_dims = np.array([0.3, 0.3, 0.2])
         I_hub = UnitInertia.SolidBox(hub_dims[0], hub_dims[1], hub_dims[2])
-        self.add_link("upper_torso_hub", 5.0, I_hub, "box", {'size': hub_dims})
+        self.add_link("upper_torso_hub", 5.0, I_hub, "box", {"size": hub_dims})
 
         # Weld at top of upper spine (+0.25*pts relative to Body, so +0.5*pts relative to Link)
-        self.add_joint("torso_weld", "fixed", "upper_spine", "upper_torso_hub",
-                       RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.5]))
+        self.add_joint(
+            "torso_weld",
+            "fixed",
+            "upper_spine",
+            "upper_torso_hub",
+            RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.5]),
+        )
 
         # 5. Arms
         for side in ["left", "right"]:
@@ -261,93 +334,207 @@ class GolfURDFGenerator:
             scap_offset = [0.0, sign * 0.18, 0.10]
             scap_len = p.scapula_rod.length
 
-            self.add_link(f"{side}_scapula_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
+            self.add_link(
+                f"{side}_scapula_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01)
+            )
 
             scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0])
-            I_scap = UnitInertia.SolidCylinder(p.scapula_rod.radius, scap_len, [0,0,1])
-            self.add_link(f"{side}_scapula_rod", p.scapula_rod.mass, I_scap, "cylinder",
-                          {'radius': p.scapula_rod.radius, 'length': scap_len}, com_offset=scap_body_offset)
+            I_scap = UnitInertia.SolidCylinder(
+                p.scapula_rod.radius, scap_len, [0, 0, 1]
+            )
+            self.add_link(
+                f"{side}_scapula_rod",
+                p.scapula_rod.mass,
+                I_scap,
+                "cylinder",
+                {"radius": p.scapula_rod.radius, "length": scap_len},
+                com_offset=scap_body_offset,
+            )
 
-            self.add_joint(f"{side}_scapula_universal_1", "revolute", "upper_torso_hub", f"{side}_scapula_dummy",
-                           RigidTransform(p=scap_offset), p.scap_axis_1)
-            self.add_joint(f"{side}_scapula_universal_2", "revolute", f"{side}_scapula_dummy", f"{side}_scapula_rod",
-                           RigidTransform(), p.scap_axis_2)
+            self.add_joint(
+                f"{side}_scapula_universal_1",
+                "revolute",
+                "upper_torso_hub",
+                f"{side}_scapula_dummy",
+                RigidTransform(p=scap_offset),
+                p.scap_axis_1,
+            )
+            self.add_joint(
+                f"{side}_scapula_universal_2",
+                "revolute",
+                f"{side}_scapula_dummy",
+                f"{side}_scapula_rod",
+                RigidTransform(),
+                p.scap_axis_2,
+            )
 
             # Shoulder
-            self.add_link(f"{side}_shoulder_yaw_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
-            self.add_joint(f"{side}_shoulder_yaw", "revolute", f"{side}_scapula_rod", f"{side}_shoulder_yaw_link",
-                           RigidTransform(p=[0, 0, scap_len]), p.shoulder_axes[0])
+            self.add_link(
+                f"{side}_shoulder_yaw_link",
+                0.1,
+                UnitInertia.SolidSphere(0.05),
+                "sphere",
+                {"radius": 0.05},
+            )
+            self.add_joint(
+                f"{side}_shoulder_yaw",
+                "revolute",
+                f"{side}_scapula_rod",
+                f"{side}_shoulder_yaw_link",
+                RigidTransform(p=[0, 0, scap_len]),
+                p.shoulder_axes[0],
+            )
 
-            self.add_link(f"{side}_shoulder_pitch_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
-            self.add_joint(f"{side}_shoulder_pitch", "revolute", f"{side}_shoulder_yaw_link", f"{side}_shoulder_pitch_link",
-                           RigidTransform(), p.shoulder_axes[1])
+            self.add_link(
+                f"{side}_shoulder_pitch_link",
+                0.1,
+                UnitInertia.SolidSphere(0.05),
+                "sphere",
+                {"radius": 0.05},
+            )
+            self.add_joint(
+                f"{side}_shoulder_pitch",
+                "revolute",
+                f"{side}_shoulder_yaw_link",
+                f"{side}_shoulder_pitch_link",
+                RigidTransform(),
+                p.shoulder_axes[1],
+            )
 
-            self.add_link(f"{side}_shoulder_roll_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
-            self.add_joint(f"{side}_shoulder_roll", "revolute", f"{side}_shoulder_pitch_link", f"{side}_shoulder_roll_link",
-                           RigidTransform(), p.shoulder_axes[2])
+            self.add_link(
+                f"{side}_shoulder_roll_link",
+                0.1,
+                UnitInertia.SolidSphere(0.05),
+                "sphere",
+                {"radius": 0.05},
+            )
+            self.add_joint(
+                f"{side}_shoulder_roll",
+                "revolute",
+                f"{side}_shoulder_pitch_link",
+                f"{side}_shoulder_roll_link",
+                RigidTransform(),
+                p.shoulder_axes[2],
+            )
 
             # Upper Arm
             ua_len = p.upper_arm.length
-            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, [0,0,1])
+            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, [0, 0, 1])
 
-            self.add_link(f"{side}_upper_arm", p.upper_arm.mass, I_ua, "cylinder",
-                          {'radius': p.upper_arm.radius, 'length': ua_len})
+            self.add_link(
+                f"{side}_upper_arm",
+                p.upper_arm.mass,
+                I_ua,
+                "cylinder",
+                {"radius": p.upper_arm.radius, "length": ua_len},
+            )
 
-            self.add_joint(f"{side}_upper_arm_weld", "fixed", f"{side}_shoulder_roll_link", f"{side}_upper_arm",
-                           RigidTransform(p=[0, 0, -ua_len/2.0]))
+            self.add_joint(
+                f"{side}_upper_arm_weld",
+                "fixed",
+                f"{side}_shoulder_roll_link",
+                f"{side}_upper_arm",
+                RigidTransform(p=[0, 0, -ua_len / 2.0]),
+            )
 
             # Elbow
             # At -L/2 relative to Body (Bottom).
-            self.add_joint(f"{side}_elbow", "revolute", f"{side}_upper_arm", f"{side}_forearm",
-                           RigidTransform(p=[0, 0, -ua_len/2.0]), p.elbow_axis)
+            self.add_joint(
+                f"{side}_elbow",
+                "revolute",
+                f"{side}_upper_arm",
+                f"{side}_forearm",
+                RigidTransform(p=[0, 0, -ua_len / 2.0]),
+                p.elbow_axis,
+            )
 
             # Forearm
             fa_len = p.forearm.length
-            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, [0,0,1])
-            fa_offset = np.array([0.0, 0.0, fa_len/2.0])
+            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, [0, 0, 1])
+            fa_offset = np.array([0.0, 0.0, fa_len / 2.0])
 
-            self.add_link(f"{side}_forearm", p.forearm.mass, I_fa, "cylinder",
-                          {'radius': p.forearm.radius, 'length': fa_len}, com_offset=fa_offset)
+            self.add_link(
+                f"{side}_forearm",
+                p.forearm.mass,
+                I_fa,
+                "cylinder",
+                {"radius": p.forearm.radius, "length": fa_len},
+                com_offset=fa_offset,
+            )
 
             # Wrist
-            self.add_link(f"{side}_wrist_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
+            self.add_link(
+                f"{side}_wrist_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01)
+            )
 
             hand_len = p.hand.length
-            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, [0,0,1])
-            hand_offset = np.array([0.0, 0.0, hand_len/2.0])
-            self.add_link(f"{side}_hand", p.hand.mass, I_hand, "cylinder",
-                          {'radius': p.hand.radius, 'length': hand_len}, com_offset=hand_offset)
+            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, [0, 0, 1])
+            hand_offset = np.array([0.0, 0.0, hand_len / 2.0])
+            self.add_link(
+                f"{side}_hand",
+                p.hand.mass,
+                I_hand,
+                "cylinder",
+                {"radius": p.hand.radius, "length": hand_len},
+                com_offset=hand_offset,
+            )
 
-            self.add_joint(f"{side}_wrist_universal_1", "revolute", f"{side}_forearm", f"{side}_wrist_dummy",
-                           RigidTransform(p=[0, 0, fa_len]), p.wrist_axis_1)
-            self.add_joint(f"{side}_wrist_universal_2", "revolute", f"{side}_wrist_dummy", f"{side}_hand",
-                           RigidTransform(), p.wrist_axis_2)
+            self.add_joint(
+                f"{side}_wrist_universal_1",
+                "revolute",
+                f"{side}_forearm",
+                f"{side}_wrist_dummy",
+                RigidTransform(p=[0, 0, fa_len]),
+                p.wrist_axis_1,
+            )
+            self.add_joint(
+                f"{side}_wrist_universal_2",
+                "revolute",
+                f"{side}_wrist_dummy",
+                f"{side}_hand",
+                RigidTransform(),
+                p.wrist_axis_2,
+            )
 
         # 6. Club (Attached to Left Hand)
         c_len = p.club.length
-        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, [0,0,1])
+        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, [0, 0, 1])
         # Grip at butt (start of cylinder in link frame), COM at L/2
         club_com_offset = np.array([0.0, 0.0, c_len / 2.0])
 
-        self.add_link("club", p.club.mass, I_club, "cylinder",
-                      {'radius': p.club.radius, 'length': c_len}, com_offset=club_com_offset)
+        self.add_link(
+            "club",
+            p.club.mass,
+            I_club,
+            "cylinder",
+            {"radius": p.club.radius, "length": c_len},
+            com_offset=club_com_offset,
+        )
 
         # Attach to left hand (tip)
-        self.add_joint("grip_lead", "fixed", "left_hand", "club",
-                       RigidTransform(p=[0, 0, p.hand.length]))
+        self.add_joint(
+            "grip_lead",
+            "fixed",
+            "left_hand",
+            "club",
+            RigidTransform(p=[0, 0, p.hand.length]),
+        )
 
-        xml_str = ET.tostring(self.root, encoding='utf-8')
-        return minidom.parseString(xml_str).toprettyxml(indent="  ")
+        xml_str = ET.tostring(self.root, encoding="utf-8")
+        return minidom.parseString(xml_str).toprettyxml(indent="  ")  # noqa: S318
+
 
 # -----------------------------
 # Main builder
 # -----------------------------
+
 
 def add_ground_and_club_contact(
     plant: MultibodyPlant,
     club: object,
     params: GolfModelParams,
 ) -> None:
+    """Add ground and club contact geometry to the plant."""
     world_body = plant.world_body()
     X_WG = RigidTransform()
 
@@ -368,26 +555,31 @@ def add_ground_and_club_contact(
         club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
     )
     plant.RegisterVisualGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_visual", np.array([1.0, 0.0, 0.0, 1.0])
+        club,
+        X_C_H,
+        Sphere(params.clubhead_radius),
+        "clubhead_visual",
+        np.array([1.0, 0.0, 0.0, 1.0]),
     )
 
+
 def add_joint_actuators(plant: MultibodyPlant) -> None:
+    """Add actuators to all single-dof joints."""
     for i in range(plant.num_joints()):
         joint = plant.get_joint(JointIndex(i))
         if joint.num_velocities() != 1:
             continue
         plant.AddJointActuator(f"{joint.name()}_act", joint)
 
-def build_golf_swing_diagram(
-    params: GolfModelParams = GolfModelParams(),
-    urdf_path: str = "golf_model.urdf"
-) -> Tuple[Diagram, MultibodyPlant, SceneGraph]:
 
+def build_golf_swing_diagram(
+    params: GolfModelParams = GolfModelParams(), urdf_path: str = "golf_model.urdf"
+) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
+    """Build the full Drake diagram for the golf swing."""
     # Generate URDF
     generator = GolfURDFGenerator(params)
     urdf_content = generator.generate()
-    with open(urdf_path, "w") as f:
-        f.write(urdf_content)
+    Path(urdf_path).write_text(urdf_content, encoding="utf-8")
 
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-3)
@@ -408,13 +600,12 @@ def build_golf_swing_diagram(
     # Club Body Center is at +L/2 in Link Frame.
     # Grip Trail is at +spacing in Link Frame.
     # Grip Trail in Body Frame = (+spacing) - (+L/2) = spacing - L/2.
-    p_club_trail = np.array([0.0, 0.0, params.hand_spacing_m - params.club.length / 2.0])
+    p_club_trail = np.array(
+        [0.0, 0.0, params.hand_spacing_m - params.club.length / 2.0]
+    )
 
     plant.AddBallConstraint(
-        body_A=right_hand,
-        p_AP=p_right_hand,
-        body_B=club,
-        p_BQ=p_club_trail
+        body_A=right_hand, p_AP=p_right_hand, body_B=club, p_BQ=p_club_trail
     )
 
     # Ground
@@ -427,7 +618,6 @@ def build_golf_swing_diagram(
     diagram = builder.Build()
     return diagram, plant, scene_graph
 
-import logging
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -439,9 +629,10 @@ if __name__ == "__main__":
         logger.info("Success! 'golf_model.urdf' generated and diagram built.")
 
         # Log some verification info
-        logger.info(f"Number of bodies: {plant.num_bodies()}")
-        logger.info(f"Number of joints: {plant.num_joints()}")
-        logger.info(f"Number of actuators: {plant.num_actuators()}")
+        # Log some verification info
+        logger.info("Number of bodies: %d", plant.num_bodies())
+        logger.info("Number of joints: %d", plant.num_joints())
+        logger.info("Number of actuators: %d", plant.num_actuators())
 
-    except Exception as e:
-        logger.error(f"Error: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Error occurred during diagram build")
