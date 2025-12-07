@@ -1,6 +1,10 @@
-# golf_swing_drake_model.py
+# drake_golf_model.py
 
+import os
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from typing import Tuple, List, Optional
+from xml.dom import minidom
 
 import numpy as np
 import numpy.typing as npt
@@ -11,32 +15,35 @@ from pydrake.all import (
     DiagramBuilder,
     HalfSpace,
     MultibodyPlant,
+    Parser,
     RigidTransform,
     SceneGraph,
-    SpatialInertia,
     Sphere,
     UnitInertia,
+    RotationMatrix,
+    RollPitchYaw,
+    ModelInstanceIndex,
+    RotationalInertia,
+    FixedOffsetFrame,
+    JointIndex,
 )
 
 # -----------------------------
 # Parameter containers
 # -----------------------------
 
-
 @dataclass
 class SegmentParams:
     length: float
     mass: float
-    radius: float = 0.03  # default cylinder radius
-
+    radius: float = 0.03
 
 @dataclass
 class GolfModelParams:
     # Anthropometric parameters
     # [m] Average adult male torso height; source: anthropometric data (Winter 2009)
     pelvis_to_shoulders: float = 0.35
-    # [kg] Combined thoracic/lumbar spine mass estimate;
-    # source: biomechanical modeling literature
+    # [kg] Combined thoracic/lumbar spine mass estimate
     spine_mass: float = 15.0
 
     scapula_rod: SegmentParams = field(
@@ -57,8 +64,6 @@ class GolfModelParams:
     )
 
     # Distance between hand attachment points along club [m]
-    # [m] = 3.0 in x 0.0254 m/in = 0.0762 m
-    # Source: USGA Equipment Rules, Section II, Appendix II (typical golf grip spacing)
     hand_spacing_m: float = 0.0762
 
     # Joint axes
@@ -69,11 +74,9 @@ class GolfModelParams:
         default_factory=lambda: np.array([0.0, 0.0, 1.0])
     )
 
-    # flex/extend
     spine_universal_axis_1: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.array([1.0, 0.0, 0.0])
     )
-    # side-bend
     spine_universal_axis_2: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.array([0.0, 1.0, 0.0])
     )
@@ -92,7 +95,8 @@ class GolfModelParams:
         default_factory=lambda: np.array([0.0, 1.0, 0.0])
     )
 
-    shoulder_axes: tuple[
+    # Shoulder gimbal: yaw -> pitch -> roll
+    shoulder_axes: Tuple[
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
@@ -113,436 +117,331 @@ class GolfModelParams:
     ground_friction_mu_dynamic: float = 0.6
     clubhead_radius: float = 0.025  # m
 
+# -----------------------------
+# URDF Generation
+# -----------------------------
+
+class GolfURDFGenerator:
+    def __init__(self, params: GolfModelParams):
+        self.params = params
+        self.root = ET.Element("robot", name="golf_swing_model")
+        self.materials = set()
+        self.dummy_mass = 0.01
+
+        # Add basic material
+        self._add_material("gray", "0.5 0.5 0.5 1.0")
+
+    def _add_material(self, name: str, rgba: str):
+        if name not in self.materials:
+            mat = ET.SubElement(self.root, "material", name=name)
+            ET.SubElement(mat, "color", rgba=rgba)
+            self.materials.add(name)
+
+    def _np_to_str(self, arr: npt.ArrayLike) -> str:
+        return " ".join(f"{x:.6g}" for x in np.array(arr).flatten())
+
+    def _transform_to_origin_xml(self, X: RigidTransform) -> ET.Element:
+        origin = ET.Element("origin")
+        p = X.translation()
+        rpy = RollPitchYaw(X.rotation()).vector()
+        origin.set("xyz", self._np_to_str(p))
+        origin.set("rpy", self._np_to_str(rpy))
+        return origin
+
+    def _create_inertia_xml(self, mass: float, unit_inertia: UnitInertia, com: npt.ArrayLike) -> ET.Element:
+        inertial = ET.Element("inertial")
+        ET.SubElement(inertial, "mass", value=f"{mass:.6g}")
+
+        origin = ET.Element("origin")
+        origin.set("xyz", self._np_to_str(com))
+        origin.set("rpy", "0 0 0")
+        inertial.append(origin)
+
+        rot_inertia = unit_inertia * mass
+        moments = rot_inertia.get_moments() # Ixx, Iyy, Izz
+        products = rot_inertia.get_products() # Ixy, Ixz, Iyz
+
+        inertia_elem = ET.SubElement(inertial, "inertia")
+        inertia_elem.set("ixx", f"{moments[0]:.6g}")
+        inertia_elem.set("iyy", f"{moments[1]:.6g}")
+        inertia_elem.set("izz", f"{moments[2]:.6g}")
+        inertia_elem.set("ixy", f"{products[0]:.6g}")
+        inertia_elem.set("ixz", f"{products[1]:.6g}")
+        inertia_elem.set("iyz", f"{products[2]:.6g}")
+
+        return inertial
+
+    def add_link(self, name: str, mass: float, unit_inertia: UnitInertia,
+                 visual_shape_tag: Optional[str] = None, visual_params: dict = None,
+                 com_offset: npt.ArrayLike = np.zeros(3)):
+        link = ET.SubElement(self.root, "link", name=name)
+
+        # Inertial
+        inertial = self._create_inertia_xml(mass, unit_inertia, com_offset)
+        link.append(inertial)
+
+        # Visual/Collision
+        if visual_shape_tag:
+            for tag in ["visual", "collision"]:
+                vis = ET.SubElement(link, tag)
+                ET.SubElement(vis, "origin", xyz=self._np_to_str(com_offset), rpy="0 0 0")
+                geom = ET.SubElement(vis, "geometry")
+
+                if visual_shape_tag == "box":
+                    ET.SubElement(geom, "box", size=self._np_to_str(visual_params['size']))
+                elif visual_shape_tag == "cylinder":
+                    ET.SubElement(geom, "cylinder", length=str(visual_params['length']), radius=str(visual_params['radius']))
+                elif visual_shape_tag == "sphere":
+                    ET.SubElement(geom, "sphere", radius=str(visual_params['radius']))
+
+                if tag == "visual":
+                    ET.SubElement(vis, "material", name="gray")
+
+        return link
+
+    def add_joint(self, name: str, type: str, parent: str, child: str,
+                  origin_transform: RigidTransform, axis: npt.ArrayLike = None):
+        joint = ET.SubElement(self.root, "joint", name=name, type=type)
+        ET.SubElement(joint, "parent", link=parent)
+        ET.SubElement(joint, "child", link=child)
+
+        joint.append(self._transform_to_origin_xml(origin_transform))
+
+        if axis is not None:
+            ET.SubElement(joint, "axis", xyz=self._np_to_str(axis))
+
+    def generate(self) -> str:
+        p = self.params
+
+        # 1. Pelvis
+        pelvis_dims = np.array([0.3, 0.2, 0.2])
+        I_pelvis = UnitInertia.SolidBox(pelvis_dims[0], pelvis_dims[1], pelvis_dims[2])
+        self.add_link("pelvis", p.spine_mass, I_pelvis, "box", {'size': pelvis_dims})
+
+        # 2. Spine Base (Hip Joint)
+        sb_dims = np.array([0.1, 0.1, 0.1])
+        I_sb = UnitInertia.SolidBox(sb_dims[0], sb_dims[1], sb_dims[2])
+        self.add_link("spine_base", 1.0, I_sb, "box", {'size': sb_dims})
+        self.add_joint("hip_yaw", "revolute", "pelvis", "spine_base", RigidTransform(), p.hip_axis)
+
+        # 3. Lower Spine
+        ls_dims = np.array([0.2, 0.2, p.pelvis_to_shoulders * 0.5])
+        I_ls = UnitInertia.SolidBox(ls_dims[0], ls_dims[1], ls_dims[2])
+        self.add_link("spine_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
+        self.add_link("lower_spine", p.spine_mass * 0.5, I_ls, "box", {'size': ls_dims})
+
+        self.add_joint("spine_universal_1", "revolute", "spine_base", "spine_dummy",
+                       RigidTransform(), p.spine_universal_axis_1)
+        self.add_joint("spine_universal_2", "revolute", "spine_dummy", "lower_spine",
+                       RigidTransform(), p.spine_universal_axis_2)
+
+        # 4. Upper Spine
+        us_dims = np.array([0.2, 0.2, p.pelvis_to_shoulders * 0.5])
+        I_us = UnitInertia.SolidBox(us_dims[0], us_dims[1], us_dims[2])
+        us_offset = np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.25])
+        self.add_link("upper_spine", p.spine_mass * 0.5, I_us, "box", {'size': us_dims}, com_offset=us_offset)
+
+        self.add_joint("spine_twist", "revolute", "lower_spine", "upper_spine",
+                       RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.25]), p.spine_twist_axis)
+
+        # Torso Hub
+        hub_dims = np.array([0.3, 0.3, 0.2])
+        I_hub = UnitInertia.SolidBox(hub_dims[0], hub_dims[1], hub_dims[2])
+        self.add_link("upper_torso_hub", 5.0, I_hub, "box", {'size': hub_dims})
+
+        # Weld at top of upper spine (+0.25*pts relative to Body, so +0.5*pts relative to Link)
+        self.add_joint("torso_weld", "fixed", "upper_spine", "upper_torso_hub",
+                       RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.5]))
+
+        # 5. Arms
+        for side in ["left", "right"]:
+            sign = 1.0 if side == "right" else -1.0
+
+            # Scapula
+            scap_offset = [0.0, sign * 0.18, 0.10]
+            scap_len = p.scapula_rod.length
+
+            self.add_link(f"{side}_scapula_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
+
+            scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0])
+            I_scap = UnitInertia.SolidCylinder(p.scapula_rod.radius, scap_len, [0,0,1])
+            self.add_link(f"{side}_scapula_rod", p.scapula_rod.mass, I_scap, "cylinder",
+                          {'radius': p.scapula_rod.radius, 'length': scap_len}, com_offset=scap_body_offset)
+
+            self.add_joint(f"{side}_scapula_universal_1", "revolute", "upper_torso_hub", f"{side}_scapula_dummy",
+                           RigidTransform(p=scap_offset), p.scap_axis_1)
+            self.add_joint(f"{side}_scapula_universal_2", "revolute", f"{side}_scapula_dummy", f"{side}_scapula_rod",
+                           RigidTransform(), p.scap_axis_2)
+
+            # Shoulder
+            self.add_link(f"{side}_shoulder_yaw_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
+            self.add_joint(f"{side}_shoulder_yaw", "revolute", f"{side}_scapula_rod", f"{side}_shoulder_yaw_link",
+                           RigidTransform(p=[0, 0, scap_len]), p.shoulder_axes[0])
+
+            self.add_link(f"{side}_shoulder_pitch_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
+            self.add_joint(f"{side}_shoulder_pitch", "revolute", f"{side}_shoulder_yaw_link", f"{side}_shoulder_pitch_link",
+                           RigidTransform(), p.shoulder_axes[1])
+
+            self.add_link(f"{side}_shoulder_roll_link", 0.1, UnitInertia.SolidSphere(0.05), "sphere", {'radius': 0.05})
+            self.add_joint(f"{side}_shoulder_roll", "revolute", f"{side}_shoulder_pitch_link", f"{side}_shoulder_roll_link",
+                           RigidTransform(), p.shoulder_axes[2])
+
+            # Upper Arm
+            ua_len = p.upper_arm.length
+            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, [0,0,1])
+
+            self.add_link(f"{side}_upper_arm", p.upper_arm.mass, I_ua, "cylinder",
+                          {'radius': p.upper_arm.radius, 'length': ua_len})
+
+            self.add_joint(f"{side}_upper_arm_weld", "fixed", f"{side}_shoulder_roll_link", f"{side}_upper_arm",
+                           RigidTransform(p=[0, 0, -ua_len/2.0]))
+
+            # Elbow
+            # At -L/2 relative to Body (Bottom).
+            self.add_joint(f"{side}_elbow", "revolute", f"{side}_upper_arm", f"{side}_forearm",
+                           RigidTransform(p=[0, 0, -ua_len/2.0]), p.elbow_axis)
+
+            # Forearm
+            fa_len = p.forearm.length
+            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, [0,0,1])
+            fa_offset = np.array([0.0, 0.0, fa_len/2.0])
+
+            self.add_link(f"{side}_forearm", p.forearm.mass, I_fa, "cylinder",
+                          {'radius': p.forearm.radius, 'length': fa_len}, com_offset=fa_offset)
+
+            # Wrist
+            self.add_link(f"{side}_wrist_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01))
+
+            hand_len = p.hand.length
+            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, [0,0,1])
+            hand_offset = np.array([0.0, 0.0, hand_len/2.0])
+            self.add_link(f"{side}_hand", p.hand.mass, I_hand, "cylinder",
+                          {'radius': p.hand.radius, 'length': hand_len}, com_offset=hand_offset)
+
+            self.add_joint(f"{side}_wrist_universal_1", "revolute", f"{side}_forearm", f"{side}_wrist_dummy",
+                           RigidTransform(p=[0, 0, fa_len]), p.wrist_axis_1)
+            self.add_joint(f"{side}_wrist_universal_2", "revolute", f"{side}_wrist_dummy", f"{side}_hand",
+                           RigidTransform(), p.wrist_axis_2)
+
+        # 6. Club (Attached to Left Hand)
+        c_len = p.club.length
+        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, [0,0,1])
+        # Grip at butt (start of cylinder in link frame), COM at L/2
+        club_com_offset = np.array([0.0, 0.0, c_len / 2.0])
+
+        self.add_link("club", p.club.mass, I_club, "cylinder",
+                      {'radius': p.club.radius, 'length': c_len}, com_offset=club_com_offset)
+
+        # Attach to left hand (tip)
+        self.add_joint("grip_lead", "fixed", "left_hand", "club",
+                       RigidTransform(p=[0, 0, p.hand.length]))
+
+        xml_str = ET.tostring(self.root, encoding='utf-8')
+        return minidom.parseString(xml_str).toprettyxml(indent="  ")
 
 # -----------------------------
-# Helper functions
+# Main builder
 # -----------------------------
-
-
-def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialInertia:
-    """
-    Uniform solid cylinder aligned with +z, COM at origin.
-    """
-    I = UnitInertia.Cylinder(radius, length)
-    return SpatialInertia(mass, np.zeros(3), I * mass)
-
-
-def add_body_with_inertia(
-    plant: MultibodyPlant, name: str, params: SegmentParams
-) -> object:
-    """
-    Add a rigid body with cylindrical inertia to the multibody plant.
-
-    Args:
-        plant: MultibodyPlant to add the body to
-        name: Name of the body
-        params: Segment parameters containing mass, radius, and length
-
-    Returns:
-        The created rigid body object
-    """
-    inertia = make_cylinder_inertia(params.mass, params.radius, params.length)
-    body = plant.AddRigidBody(name, inertia)
-    return body
-
-
-def add_free_base_with_hip(
-    plant: MultibodyPlant, params: GolfModelParams
-) -> tuple[object, object]:
-    """
-    Adds a 6-DoF pelvis base (FreeJoint) and a revolute hip joint
-    to a 'spine_base' body.
-    """
-    pelvis_inertia = SpatialInertia(
-        params.spine_mass,
-        np.zeros(3),
-        UnitInertia.SolidBox(0.3, 0.2, 0.2) * params.spine_mass,
-    )
-    pelvis = plant.AddRigidBody("pelvis", pelvis_inertia)
-
-    # 6-DoF between world and pelvis
-    plant.AddJointFreeBody(pelvis)
-
-    # Revolute hip joint
-    spine_base_inertia = SpatialInertia(
-        1.0, np.zeros(3), UnitInertia.SolidBox(0.1, 0.1, 0.1)
-    )
-    spine_base = plant.AddRigidBody("spine_base", spine_base_inertia)
-
-    axis = params.hip_axis / np.linalg.norm(params.hip_axis)
-
-    plant.AddJointRevolute(
-        "hip_yaw",
-        parent=pelvis,
-        child=spine_base,
-        pose_in_parent=RigidTransform(),  # hip at pelvis origin
-        pose_in_child=RigidTransform(),
-        axis=axis,
-    )
-
-    return pelvis, spine_base
-
-
-def add_spine_stack(
-    plant: MultibodyPlant,
-    spine_base: object,
-    params: GolfModelParams,
-) -> object:
-    """
-    Universal + twist revolute -> upper torso hub.
-    """
-    # Lower spine (universal)
-    lower_spine_inertia = SpatialInertia(
-        params.spine_mass * 0.5,
-        np.zeros(3),
-        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5)
-        * (params.spine_mass * 0.5),
-    )
-    lower_spine = plant.AddRigidBody("lower_spine", lower_spine_inertia)
-
-    plant.AddJointUniversal(
-        "spine_universal",
-        parent=spine_base,
-        child=lower_spine,
-        pose_in_parent=RigidTransform(),
-        pose_in_child=RigidTransform(),
-        # axis1 and axis2 are fixed in Drake's UniversalJoint (x then y)
-    )
-
-    # Upper spine twist
-    upper_spine_inertia = SpatialInertia(
-        params.spine_mass * 0.5,
-        np.zeros(3),
-        UnitInertia.SolidBox(0.2, 0.2, params.pelvis_to_shoulders * 0.5)
-        * (params.spine_mass * 0.5),
-    )
-    upper_spine = plant.AddRigidBody("upper_spine", upper_spine_inertia)
-
-    twist_axis = params.spine_twist_axis / np.linalg.norm(params.spine_twist_axis)
-
-    plant.AddJointRevolute(
-        "spine_twist",
-        parent=lower_spine,
-        child=upper_spine,
-        pose_in_parent=RigidTransform(p=[0.0, 0.0, params.pelvis_to_shoulders * 0.25]),
-        pose_in_child=RigidTransform(p=[0.0, 0.0, -params.pelvis_to_shoulders * 0.25]),
-        axis=twist_axis,
-    )
-
-    # Upper torso hub
-    hub_inertia = SpatialInertia(
-        5.0, np.zeros(3), UnitInertia.SolidBox(0.3, 0.3, 0.2) * 5.0
-    )
-    upper_torso = plant.AddRigidBody("upper_torso_hub", hub_inertia)
-
-    plant.WeldFrames(
-        upper_spine.body_frame(),
-        upper_torso.body_frame(),
-        RigidTransform(p=[0.0, 0.0, params.pelvis_to_shoulders * 0.25]),
-    )
-
-    return upper_torso
-
-
-def add_scapula_and_shoulder_chain(
-    plant: MultibodyPlant,
-    upper_torso: object,
-    side: str,
-    params: GolfModelParams,
-) -> object:
-    """
-    Scapula universal + rod, then 3-DOF shoulder (gimbal from 3 revolutes),
-    then upper arm.
-    """
-    sign = 1.0 if side == "right" else -1.0
-
-    scap_body = add_body_with_inertia(plant, f"{side}_scapula_rod", params.scapula_rod)
-
-    a1 = params.scap_axis_1 / np.linalg.norm(params.scap_axis_1)
-    a2 = params.scap_axis_2 / np.linalg.norm(params.scap_axis_2)
-
-    scap_offset = [0.0, sign * 0.18, 0.10]
-    plant.AddJointUniversal(
-        f"{side}_scapula_universal",
-        parent=upper_torso,
-        child=scap_body,
-        pose_in_parent=RigidTransform(p=scap_offset),
-        pose_in_child=RigidTransform(p=[0.0, 0.0, -params.scapula_rod.length / 2.0]),
-        axis1=a1,
-        axis2=a2,
-    )
-
-    # Shoulder gimbal: yaw -> pitch -> roll
-    yaw_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1)
-    yaw_link = plant.AddRigidBody(f"{side}_shoulder_yaw_link", yaw_inertia)
-
-    pitch_inertia = SpatialInertia(
-        0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1
-    )
-    pitch_link = plant.AddRigidBody(f"{side}_shoulder_pitch_link", pitch_inertia)
-
-    roll_inertia = SpatialInertia(0.1, np.zeros(3), UnitInertia.SolidSphere(0.05) * 0.1)
-    roll_link = plant.AddRigidBody(f"{side}_shoulder_roll_link", roll_inertia)
-
-    a_yaw, a_pitch, a_roll = params.shoulder_axes
-
-    plant.AddJointRevolute(
-        f"{side}_shoulder_yaw",
-        parent=scap_body,
-        child=yaw_link,
-        pose_in_parent=RigidTransform(p=[0.0, 0.0, params.scapula_rod.length / 2.0]),
-        pose_in_child=RigidTransform(),
-        axis=a_yaw / np.linalg.norm(a_yaw),
-    )
-
-    plant.AddJointRevolute(
-        f"{side}_shoulder_pitch",
-        parent=yaw_link,
-        child=pitch_link,
-        pose_in_parent=RigidTransform(),
-        pose_in_child=RigidTransform(),
-        axis=a_pitch / np.linalg.norm(a_pitch),
-    )
-
-    plant.AddJointRevolute(
-        f"{side}_shoulder_roll",
-        parent=pitch_link,
-        child=roll_link,
-        pose_in_parent=RigidTransform(),
-        pose_in_child=RigidTransform(),
-        axis=a_roll / np.linalg.norm(a_roll),
-    )
-
-    upper_arm = add_body_with_inertia(plant, f"{side}_upper_arm", params.upper_arm)
-
-    plant.WeldFrames(
-        roll_link.body_frame(),
-        upper_arm.body_frame(),  # type: ignore[attr-defined]
-        RigidTransform(p=[0.0, 0.0, -params.upper_arm.length / 2.0]),
-    )
-
-    return upper_arm
-
-
-def add_elbow_and_forearm(
-    plant: MultibodyPlant,
-    upper_arm: object,
-    side: str,
-    params: GolfModelParams,
-) -> object:
-    """
-    Add forearm body and revolute elbow joint to the multibody plant.
-
-    Args:
-        plant: MultibodyPlant to add the forearm and joint to
-        upper_arm: Parent body (upper arm) to attach forearm to
-        side: Side identifier ('left' or 'right')
-        params: Golf model parameters containing forearm and elbow properties
-
-    Returns:
-        The created forearm body object
-    """
-    forearm = add_body_with_inertia(plant, f"{side}_forearm", params.forearm)
-
-    axis = params.elbow_axis / np.linalg.norm(params.elbow_axis)
-
-    plant.AddJointRevolute(
-        f"{side}_elbow",
-        parent=upper_arm,
-        child=forearm,
-        pose_in_parent=RigidTransform(p=[0.0, 0.0, params.upper_arm.length / 2.0]),
-        pose_in_child=RigidTransform(p=[0.0, 0.0, -params.forearm.length / 2.0]),
-        axis=axis,
-    )
-
-    return forearm
-
-
-def add_wrist_and_hand(
-    plant: MultibodyPlant,
-    forearm: object,
-    side: str,
-    params: GolfModelParams,
-) -> object:
-    """
-    Add hand body and universal wrist joint to the multibody plant.
-
-    Args:
-        plant: MultibodyPlant to add the hand and joint to
-        forearm: Parent body (forearm) to attach hand to
-        side: Side identifier ('left' or 'right')
-        params: Golf model parameters containing hand and wrist properties
-
-    Returns:
-        The created hand body object
-    """
-    hand = add_body_with_inertia(plant, f"{side}_hand", params.hand)
-
-    a1 = params.wrist_axis_1 / np.linalg.norm(params.wrist_axis_1)
-    a2 = params.wrist_axis_2 / np.linalg.norm(params.wrist_axis_2)
-
-    plant.AddJointUniversal(
-        f"{side}_wrist_universal",
-        parent=forearm,
-        child=hand,
-        pose_in_parent=RigidTransform(p=[0.0, 0.0, params.forearm.length / 2.0]),
-        pose_in_child=RigidTransform(p=[0.0, 0.0, -params.hand.length / 2.0]),
-        axis1=a1,
-        axis2=a2,
-    )
-
-    return hand
-
-
-def add_club_with_dual_hand_constraints(
-    plant: MultibodyPlant,
-    left_hand: object,
-    right_hand: object,
-    params: GolfModelParams,
-) -> object:
-    """
-    Create the club body and attach each hand to *different* points on the shaft
-    using ball constraints.
-
-    Convention:
-      - Club's +z axis runs from butt toward head.
-      - Club COM is at z = 0.
-      - Left (lead) hand attaches at z = -hand_spacing/2
-      - Right (trail) hand attaches at z = +hand_spacing/2
-      - Clubhead (collision sphere) is at z = +club.length/2
-    """
-    # Ensure spacing isn't bigger than club length (just in case)
-    spacing = min(params.hand_spacing_m, 0.5 * params.club.length)
-
-    club = add_body_with_inertia(plant, "club", params.club)
-
-    # Points on club where hands attach (in club frame)
-    p_club_lead = [0.0, 0.0, -0.5 * spacing]  # left hand (lead) nearer butt
-    p_club_trail = [0.0, 0.0, +0.5 * spacing]  # right hand (trail) nearer head
-
-    # Points on hands (distal end along +z in hand frame)
-    p_left_hand = [0.0, 0.0, params.hand.length / 2.0]
-    p_right_hand = [0.0, 0.0, params.hand.length / 2.0]
-
-    # Ball constraint: left hand to proximal point on club
-    # Parameters: bodyA, p_AP (point on A), bodyB, p_BQ (point on B)
-    plant.AddBallConstraint(
-        frameA=left_hand.body_frame(),  # type: ignore[attr-defined]
-        p_AP=p_left_hand,
-        frameB=club.body_frame(),  # type: ignore[attr-defined]
-        p_BQ=p_club_lead,
-    )
-
-    # Ball constraint: right hand to distal point on club
-    plant.AddBallConstraint(
-        frameA=right_hand.body_frame(),  # type: ignore[attr-defined]
-        p_AP=p_right_hand,
-        frameB=club.body_frame(),  # type: ignore[attr-defined]
-        p_BQ=p_club_trail,
-    )
-
-    return club
-
 
 def add_ground_and_club_contact(
     plant: MultibodyPlant,
-    scene_graph: SceneGraph,
     club: object,
     params: GolfModelParams,
 ) -> None:
-    """
-    Adds a ground half-space, and a spherical collision at the clubhead.
-    """
     world_body = plant.world_body()
-    X_WG = RigidTransform()  # z=0 plane
+    X_WG = RigidTransform()
 
     friction = CoulombFriction(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
-
-    # Ground collision + visual
     plant.RegisterCollisionGeometry(
         world_body, X_WG, HalfSpace(), "ground_collision", friction
     )
-    plant.RegisterVisualGeometry(world_body, X_WG, HalfSpace(), "ground_visual")
+    # Add Visual for ground with color
+    plant.RegisterVisualGeometry(
+        world_body, X_WG, HalfSpace(), "ground_visual", np.array([0.3, 0.3, 0.3, 1.0])
+    )
 
-    # Clubhead collision sphere at distal end of club (+z)
+    # Clubhead collision sphere
     X_C_H = RigidTransform(p=[0.0, 0.0, params.club.length / 2.0])
     plant.RegisterCollisionGeometry(
         club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
     )
     plant.RegisterVisualGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_visual"
+        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_visual", np.array([1.0, 0.0, 0.0, 1.0])
     )
 
-
-def add_joint_actuators(
-    plant: MultibodyPlant,
-) -> None:
-    """
-    Add actuators for ALL joints in the plant.
-    This makes it easy to use InverseDynamicsController.
-    """
-    for joint_index in range(plant.num_joints()):
-        joint = plant.get_joint(joint_index)
-        if joint.num_velocities() == 0:
+def add_joint_actuators(plant: MultibodyPlant) -> None:
+    for i in range(plant.num_joints()):
+        joint = plant.get_joint(JointIndex(i))
+        if joint.num_velocities() != 1:
             continue
         plant.AddJointActuator(f"{joint.name()}_act", joint)
 
-
-# -----------------------------
-# Main model builder
-# -----------------------------
-
-
 def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
-) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
-    """
-    Builds the full multibody model + scene graph:
-      - Free pelvis + hip
-      - Spine (universal + twist)
-      - Upper torso hub
-      - Left and right arm chains
-      - Club attached to both hands with 3" separation
-      - Ground contact + clubhead collision
-      - Joint actuators for all non-weld joints
-    Returns (diagram, plant, scene_graph).
-    """
+    urdf_path: str = "golf_model.urdf"
+) -> Tuple[Diagram, MultibodyPlant, SceneGraph]:
+
+    # Generate URDF
+    generator = GolfURDFGenerator(params)
+    urdf_content = generator.generate()
+    with open(urdf_path, "w") as f:
+        f.write(urdf_content)
+
     builder = DiagramBuilder()
-    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-3)
 
-    # Base and spine
-    pelvis, spine_base = add_free_base_with_hip(plant, params)
-    upper_torso = add_spine_stack(plant, spine_base, params)
+    parser = Parser(plant)
+    model_instance = parser.AddModels(urdf_path)[0]
 
-    # Arms
-    left_upper_arm = add_scapula_and_shoulder_chain(
-        plant, upper_torso, side="left", params=params
+    # Add Right Hand Constraint
+    right_hand = plant.GetBodyByName("right_hand", model_instance)
+    club = plant.GetBodyByName("club", model_instance)
+
+    # Calculate points in Body Frames
+    # Right Hand Tip: [0, 0, hand_len/2] (Body is at L/2, Tip at L)
+    p_right_hand = np.array([0.0, 0.0, params.hand.length / 2.0])
+
+    # Club Trail Point relative to Club Body.
+    # Grip Lead (Link Frame) is at 0 in Link Frame.
+    # Club Body Center is at +L/2 in Link Frame.
+    # Grip Trail is at +spacing in Link Frame.
+    # Grip Trail in Body Frame = (+spacing) - (+L/2) = spacing - L/2.
+    p_club_trail = np.array([0.0, 0.0, params.hand_spacing_m - params.club.length / 2.0])
+
+    plant.AddBallConstraint(
+        body_A=right_hand,
+        p_AP=p_right_hand,
+        body_B=club,
+        p_BQ=p_club_trail
     )
-    left_forearm = add_elbow_and_forearm(
-        plant, left_upper_arm, side="left", params=params
-    )
-    left_hand = add_wrist_and_hand(plant, left_forearm, side="left", params=params)
 
-    right_upper_arm = add_scapula_and_shoulder_chain(
-        plant, upper_torso, side="right", params=params
-    )
-    right_forearm = add_elbow_and_forearm(
-        plant, right_upper_arm, side="right", params=params
-    )
-    right_hand = add_wrist_and_hand(plant, right_forearm, side="right", params=params)
-
-    # Club with two separate hand constraints (= parallel grip with spacing)
-    club = add_club_with_dual_hand_constraints(plant, left_hand, right_hand, params)
-
-    # Ground and contact
-    add_ground_and_club_contact(plant, scene_graph, club, params)
+    # Ground
+    add_ground_and_club_contact(plant, club, params)
 
     # Actuators
     add_joint_actuators(plant)
 
     plant.Finalize()
-
     diagram = builder.Build()
     return diagram, plant, scene_graph
+
+import logging
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.info("Generating URDF and building diagram...")
+        diagram, plant, scene_graph = build_golf_swing_diagram()
+        logger.info("Success! 'golf_model.urdf' generated and diagram built.")
+
+        # Log some verification info
+        logger.info(f"Number of bodies: {plant.num_bodies()}")
+        logger.info(f"Number of joints: {plant.num_joints()}")
+        logger.info(f"Number of actuators: {plant.num_actuators()}")
+
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
