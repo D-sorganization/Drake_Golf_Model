@@ -22,9 +22,18 @@ from pydrake.all import (
     RigidTransform,
     RollPitchYaw,
     SceneGraph,
+    SpatialInertia,
     Sphere,
     UnitInertia,
 )
+
+__all__ = [
+    "GolfModelParams",
+    "SegmentParams",
+    "build_golf_swing_diagram",
+    "make_cylinder_inertia",
+    "GolfURDFGenerator",
+]
 
 # -----------------------------
 # Parameter containers
@@ -125,6 +134,36 @@ class GolfModelParams:
 # -----------------------------
 # URDF Generation
 # -----------------------------
+
+
+# -----------------------------
+# Helper Functions
+# -----------------------------
+
+
+def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialInertia:
+    """Create spatial inertia for a solid cylinder with its axis along Z.
+
+    Args:
+        mass: The mass of the cylinder [kg].
+        radius: The radius of the cylinder [m].
+        length: The length of the cylinder [m].
+
+    Returns:
+        Spatial inertia of the cylinder about its center of mass.
+
+    Raises:
+        ValueError: If mass is non-positive.
+    """
+    if mass <= 0:
+        msg = "Mass must be positive."
+        raise ValueError(msg)
+
+    # UnitInertia.SolidCylinder creates a UnitInertia.
+    # We multiply by mass to get SpatialInertia.
+    # The cylinder is aligned with Z axis by default in pydrake's SolidCylinder.
+    # Axis argument [0, 0, 1] confirms alignment.
+    return UnitInertia.SolidCylinder(radius, length, [0, 0, 1]) * mass
 
 
 class GolfURDFGenerator:
