@@ -2,7 +2,7 @@
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
 import logging
-import xml.etree.ElementTree as ET  # noqa: N817
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -17,6 +17,8 @@ from pydrake.all import (
     DiagramBuilder,
     HalfSpace,
     JointIndex,
+    Meshcat,
+    MeshcatVisualizer,
     MultibodyPlant,
     Parser,
     RigidTransform,
@@ -29,10 +31,10 @@ from pydrake.all import (
 
 __all__ = [
     "GolfModelParams",
+    "GolfURDFGenerator",
     "SegmentParams",
     "build_golf_swing_diagram",
     "make_cylinder_inertia",
-    "GolfURDFGenerator",
 ]
 
 # -----------------------------
@@ -160,10 +162,10 @@ def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialI
         raise ValueError(msg)
 
     # UnitInertia.SolidCylinder creates a UnitInertia.
-    # We multiply by mass to get SpatialInertia.
     # The cylinder is aligned with Z axis by default in pydrake's SolidCylinder.
     # Axis argument [0, 0, 1] confirms alignment.
-    return UnitInertia.SolidCylinder(radius, length, [0, 0, 1]) * mass
+    unit_inertia = UnitInertia.SolidCylinder(radius, length, [0, 0, 1])
+    return SpatialInertia(mass, [0, 0, 0], unit_inertia)
 
 
 class GolfURDFGenerator:
@@ -612,7 +614,9 @@ def add_joint_actuators(plant: MultibodyPlant) -> None:
 
 
 def build_golf_swing_diagram(
-    params: GolfModelParams = GolfModelParams(), urdf_path: str = "golf_model.urdf"
+    params: GolfModelParams = GolfModelParams(),
+    urdf_path: str = "golf_model.urdf",
+    meshcat: Meshcat | None = None,
 ) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
     """Build the full Drake diagram for the golf swing."""
     # Generate URDF
@@ -652,6 +656,10 @@ def build_golf_swing_diagram(
 
     # Actuators
     add_joint_actuators(plant)
+
+    # Visualization
+    if meshcat:
+        MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
 
     plant.Finalize()
     diagram = builder.Build()
