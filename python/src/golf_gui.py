@@ -15,10 +15,10 @@ try:
     from .logger_utils import setup_logging
 except ImportError:
     from drake_golf_model import (
-        GolfModelParams,  # type: ignore[no-redef]
-        build_golf_swing_diagram,  # type: ignore[no-redef]
+        GolfModelParams,
+        build_golf_swing_diagram,
     )
-    from logger_utils import setup_logging  # type: ignore[no-redef]
+    from logger_utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
