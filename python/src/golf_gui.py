@@ -33,8 +33,13 @@ def main() -> None:
     try:
         meshcat = StartMeshcat()
         logger.info("Meshcat server started at: %s", meshcat.web_url())
-    except Exception:  # noqa: BLE001
-        logger.exception("Failed to start Meshcat")
+    except Exception:
+        logger.exception(
+            "Failed to start Meshcat. Common causes include:\n"
+            "- Port already in use (try closing other Meshcat sessions or rebooting)\n"
+            "- Missing or incompatible Meshcat/Drake dependencies\n"
+            "- Firewall or network restrictions"
+        )
         return
 
     # Build Diagram with Visualization

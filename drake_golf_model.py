@@ -2,7 +2,7 @@
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
 import logging
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # noqa: N817
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -165,6 +165,7 @@ def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialI
     # The cylinder is aligned with Z axis by default in pydrake's SolidCylinder.
     # Axis argument [0, 0, 1] confirms alignment.
     unit_inertia = UnitInertia.SolidCylinder(radius, length, [0, 0, 1])
+    # Construct SpatialInertia using mass, center of mass at [0, 0, 0], and the unit inertia.
     return SpatialInertia(mass, [0, 0, 0], unit_inertia)
 
 
@@ -657,11 +658,11 @@ def build_golf_swing_diagram(
     # Actuators
     add_joint_actuators(plant)
 
+    plant.Finalize()
+
     # Visualization
     if meshcat:
         MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
-
-    plant.Finalize()
     diagram = builder.Build()
     return diagram, plant, scene_graph
 
