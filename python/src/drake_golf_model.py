@@ -1,8 +1,7 @@
 # drake_golf_model.py
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
-import logging
-import xml.etree.ElementTree as ET  # noqa: N817
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -28,6 +27,8 @@ from pydrake.all import (
     Sphere,
     UnitInertia,
 )
+
+from .logger_utils import get_logger, setup_logging
 
 __all__ = [
     "GolfModelParams",
@@ -668,8 +669,8 @@ def build_golf_swing_diagram(
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+    setup_logging()
+    logger = get_logger(__name__)
 
     try:
         logger.info("Generating URDF and building diagram...")
