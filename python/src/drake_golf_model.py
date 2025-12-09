@@ -1,8 +1,7 @@
 # drake_golf_model.py
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
-import logging
-import xml.etree.ElementTree as ET  # noqa: N817
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -590,7 +589,7 @@ def add_ground_and_club_contact(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
     plant.RegisterCollisionGeometry(
-        world_body, X_WG, HalfSpace(), "ground_collision", friction  # type: ignore[arg-type]
+        world_body, X_WG, HalfSpace(), "ground_collision", friction  # type: ignore[arg-type]  # Drake's type stubs are too strict; friction is accepted at runtime.
     )
     # Add Visual for ground with color
     plant.RegisterVisualGeometry(
@@ -600,7 +599,7 @@ def add_ground_and_club_contact(
     # Clubhead collision sphere
     X_C_H = RigidTransform(p=np.array([0.0, 0.0, params.club.length / 2.0]))
     plant.RegisterCollisionGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction  # type: ignore[arg-type]
+        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction  # type: ignore[arg-type]  # pydrake's type stubs for RegisterCollisionGeometry are incomplete: friction argument is accepted at runtime.
     )
     plant.RegisterVisualGeometry(
         club,
@@ -635,9 +634,7 @@ def build_golf_swing_diagram(
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-3)
 
     parser = Parser(plant)
-    # Parser expects PathLike, but sometimes strings trigger mypy.
-    # We ignore the type error here as str is compatible at runtime.
-    model_instance = parser.AddModels(urdf_path)[0]  # type: ignore[arg-type]
+    model_instance = parser.AddModels(Path(urdf_path))[0]
 
     # Add Right Hand Constraint
     right_hand = plant.GetBodyByName("right_hand", model_instance)
