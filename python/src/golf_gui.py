@@ -7,11 +7,18 @@ from pydrake.all import (
     StartMeshcat,
 )
 
-from .drake_golf_model import (
-    GolfModelParams,
-    build_golf_swing_diagram,
-)
-from .logger_utils import setup_logging
+try:
+    from .drake_golf_model import (
+        GolfModelParams,
+        build_golf_swing_diagram,
+    )
+    from .logger_utils import setup_logging
+except ImportError:
+    from drake_golf_model import (
+        GolfModelParams,  # type: ignore[no-redef]
+        build_golf_swing_diagram,  # type: ignore[no-redef]
+    )
+    from logger_utils import setup_logging  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
