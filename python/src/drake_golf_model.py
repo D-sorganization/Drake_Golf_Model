@@ -21,12 +21,17 @@ from pydrake.all import (
     MeshcatVisualizer,
     MultibodyPlant,
     Parser,
+    RigidBody,
     RigidTransform,
     RollPitchYaw,
     SceneGraph,
     SpatialInertia,
     Sphere,
     UnitInertia,
+)
+
+from .constants import (
+    GOLF_BALL_DIAMETER_M,
 )
 
 __all__ = [
@@ -130,7 +135,8 @@ class GolfModelParams:
     # Contact / ground
     ground_friction_mu_static: float = 0.8
     ground_friction_mu_dynamic: float = 0.6
-    clubhead_radius: float = 0.025  # m
+    # Default clubhead radius based on golf ball diameter approx
+    clubhead_radius: float = GOLF_BALL_DIAMETER_M / 2.0 + 0.005  # Slight margin
 
 
 # -----------------------------
@@ -164,9 +170,9 @@ def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialI
     # UnitInertia.SolidCylinder creates a UnitInertia.
     # The cylinder is aligned with Z axis by default in pydrake's SolidCylinder.
     # Axis argument [0, 0, 1] confirms alignment.
-    unit_inertia = UnitInertia.SolidCylinder(radius, length, [0, 0, 1])
+    unit_inertia = UnitInertia.SolidCylinder(radius, length, np.array([0.0, 0.0, 1.0]))
     # Construct SpatialInertia using mass, center of mass at [0, 0, 0], and the unit inertia.
-    return SpatialInertia(mass, [0, 0, 0], unit_inertia)
+    return SpatialInertia(mass, np.zeros(3), unit_inertia)
 
 
 class GolfURDFGenerator:
@@ -350,7 +356,7 @@ class GolfURDFGenerator:
             "revolute",
             "lower_spine",
             "upper_spine",
-            RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.25]),
+            RigidTransform(p=np.array([0., 0., p.pelvis_to_shoulders * 0.25])),
             p.spine_twist_axis,
         )
 
@@ -365,7 +371,7 @@ class GolfURDFGenerator:
             "fixed",
             "upper_spine",
             "upper_torso_hub",
-            RigidTransform(p=[0, 0, p.pelvis_to_shoulders * 0.5]),
+            RigidTransform(p=np.array([0., 0., p.pelvis_to_shoulders * 0.5])),
         )
 
         # 5. Arms
@@ -373,7 +379,7 @@ class GolfURDFGenerator:
             sign = 1.0 if side == "right" else -1.0
 
             # Scapula
-            scap_offset = [0.0, sign * 0.18, 0.10]
+            scap_offset = np.array([0.0, sign * 0.18, 0.10])
             scap_len = p.scapula_rod.length
 
             self.add_link(
@@ -382,7 +388,7 @@ class GolfURDFGenerator:
 
             scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0])
             I_scap = UnitInertia.SolidCylinder(
-                p.scapula_rod.radius, scap_len, [0, 0, 1]
+                p.scapula_rod.radius, scap_len, np.array([0., 0., 1.])
             )
             self.add_link(
                 f"{side}_scapula_rod",
@@ -423,7 +429,7 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_scapula_rod",
                 f"{side}_shoulder_yaw_link",
-                RigidTransform(p=[0, 0, scap_len]),
+                RigidTransform(p=np.array([0., 0., scap_len])),
                 p.shoulder_axes[0],
             )
 
@@ -461,7 +467,7 @@ class GolfURDFGenerator:
 
             # Upper Arm
             ua_len = p.upper_arm.length
-            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, [0, 0, 1])
+            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, np.array([0., 0., 1.]))
 
             self.add_link(
                 f"{side}_upper_arm",
@@ -476,7 +482,7 @@ class GolfURDFGenerator:
                 "fixed",
                 f"{side}_shoulder_roll_link",
                 f"{side}_upper_arm",
-                RigidTransform(p=[0, 0, -ua_len / 2.0]),
+                RigidTransform(p=np.array([0., 0., -ua_len / 2.0])),
             )
 
             # Elbow
@@ -486,13 +492,13 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_upper_arm",
                 f"{side}_forearm",
-                RigidTransform(p=[0, 0, -ua_len / 2.0]),
+                RigidTransform(p=np.array([0., 0., -ua_len / 2.0])),
                 p.elbow_axis,
             )
 
             # Forearm
             fa_len = p.forearm.length
-            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, [0, 0, 1])
+            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, np.array([0., 0., 1.]))
             fa_offset = np.array([0.0, 0.0, fa_len / 2.0])
 
             self.add_link(
@@ -510,7 +516,7 @@ class GolfURDFGenerator:
             )
 
             hand_len = p.hand.length
-            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, [0, 0, 1])
+            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, np.array([0., 0., 1.]))
             hand_offset = np.array([0.0, 0.0, hand_len / 2.0])
             self.add_link(
                 f"{side}_hand",
@@ -526,7 +532,7 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_forearm",
                 f"{side}_wrist_dummy",
-                RigidTransform(p=[0, 0, fa_len]),
+                RigidTransform(p=np.array([0., 0., fa_len])),
                 p.wrist_axis_1,
             )
             self.add_joint(
@@ -540,7 +546,7 @@ class GolfURDFGenerator:
 
         # 6. Club (Attached to Left Hand)
         c_len = p.club.length
-        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, [0, 0, 1])
+        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, np.array([0., 0., 1.]))
         # Grip at butt (start of cylinder in link frame), COM at L/2
         club_com_offset = np.array([0.0, 0.0, c_len / 2.0])
 
@@ -559,7 +565,7 @@ class GolfURDFGenerator:
             "fixed",
             "left_hand",
             "club",
-            RigidTransform(p=[0, 0, p.hand.length]),
+            RigidTransform(p=np.array([0., 0., p.hand.length])),
         )
 
         xml_str = ET.tostring(self.root, encoding="utf-8")
@@ -573,7 +579,7 @@ class GolfURDFGenerator:
 
 def add_ground_and_club_contact(
     plant: MultibodyPlant,
-    club: object,
+    club: RigidBody,
     params: GolfModelParams,
 ) -> None:
     """Add ground and club contact geometry to the plant."""
@@ -584,7 +590,7 @@ def add_ground_and_club_contact(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
     plant.RegisterCollisionGeometry(
-        world_body, X_WG, HalfSpace(), "ground_collision", friction
+        world_body, X_WG, HalfSpace(), "ground_collision", friction  # type: ignore[arg-type]
     )
     # Add Visual for ground with color
     plant.RegisterVisualGeometry(
@@ -592,9 +598,9 @@ def add_ground_and_club_contact(
     )
 
     # Clubhead collision sphere
-    X_C_H = RigidTransform(p=[0.0, 0.0, params.club.length / 2.0])
+    X_C_H = RigidTransform(p=np.array([0.0, 0.0, params.club.length / 2.0]))
     plant.RegisterCollisionGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
+        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction  # type: ignore[arg-type]
     )
     plant.RegisterVisualGeometry(
         club,
@@ -629,7 +635,9 @@ def build_golf_swing_diagram(
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-3)
 
     parser = Parser(plant)
-    model_instance = parser.AddModels(urdf_path)[0]
+    # Parser expects PathLike, but sometimes strings trigger mypy.
+    # We ignore the type error here as str is compatible at runtime.
+    model_instance = parser.AddModels(urdf_path)[0]  # type: ignore[arg-type]
 
     # Add Right Hand Constraint
     right_hand = plant.GetBodyByName("right_hand", model_instance)
@@ -665,22 +673,3 @@ def build_golf_swing_diagram(
         MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
     diagram = builder.Build()
     return diagram, plant, scene_graph
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-    try:
-        logger.info("Generating URDF and building diagram...")
-        diagram, plant, scene_graph = build_golf_swing_diagram()
-        logger.info("Success! 'golf_model.urdf' generated and diagram built.")
-
-        # Log some verification info
-        # Log some verification info
-        logger.info("Number of bodies: %d", plant.num_bodies())
-        logger.info("Number of joints: %d", plant.num_joints())
-        logger.info("Number of actuators: %d", plant.num_actuators())
-
-    except Exception:
-        logger.exception("Error occurred during diagram build")
