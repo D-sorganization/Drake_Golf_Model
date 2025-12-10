@@ -1,25 +1,25 @@
 """Golf Analysis Suite GUI Entry Point."""
 
 import logging
-import sys
-from pathlib import Path
 
 from pydrake.all import (
     Simulator,
     StartMeshcat,
 )
 
-# Add repo root to path to import drake_golf_model
-# Assuming this file is in python/src/
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from drake_golf_model import (  # noqa: E402
-    GolfModelParams,
-    build_golf_swing_diagram,
-)
-from python.src.logger_utils import setup_logging  # noqa: E402
+try:
+    from .drake_golf_model import (
+        GolfModelParams,
+        build_golf_swing_diagram,
+    )
+    from .logger_utils import setup_logging
+except ImportError:
+    # Fallback imports for direct script execution (when run as __main__)
+    from drake_golf_model import (  # type: ignore[no-redef]
+        GolfModelParams,
+        build_golf_swing_diagram,
+    )
+    from logger_utils import setup_logging  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 

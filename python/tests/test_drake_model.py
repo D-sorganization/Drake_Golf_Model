@@ -9,7 +9,7 @@ import pytest
 # Try to import drake_golf_model, skip all tests if pydrake is not available
 # Note: pythonpath is configured in pytest.ini to include the parent directory
 try:
-    from drake_golf_model import (
+    from python.src.drake_golf_model import (
         GolfModelParams,
         SegmentParams,
         build_golf_swing_diagram,
