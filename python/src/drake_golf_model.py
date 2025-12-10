@@ -1,7 +1,7 @@
 # drake_golf_model.py
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # noqa: N817  # ET is the standard alias for ElementTree in Python XML processing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -355,7 +355,7 @@ class GolfURDFGenerator:
             "revolute",
             "lower_spine",
             "upper_spine",
-            RigidTransform(p=np.array([0., 0., p.pelvis_to_shoulders * 0.25])),
+            RigidTransform(p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.25])),
             p.spine_twist_axis,
         )
 
@@ -370,7 +370,7 @@ class GolfURDFGenerator:
             "fixed",
             "upper_spine",
             "upper_torso_hub",
-            RigidTransform(p=np.array([0., 0., p.pelvis_to_shoulders * 0.5])),
+            RigidTransform(p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.5])),
         )
 
         # 5. Arms
@@ -387,7 +387,7 @@ class GolfURDFGenerator:
 
             scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0])
             I_scap = UnitInertia.SolidCylinder(
-                p.scapula_rod.radius, scap_len, np.array([0., 0., 1.])
+                p.scapula_rod.radius, scap_len, np.array([0.0, 0.0, 1.0])
             )
             self.add_link(
                 f"{side}_scapula_rod",
@@ -428,7 +428,7 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_scapula_rod",
                 f"{side}_shoulder_yaw_link",
-                RigidTransform(p=np.array([0., 0., scap_len])),
+                RigidTransform(p=np.array([0.0, 0.0, scap_len])),
                 p.shoulder_axes[0],
             )
 
@@ -466,7 +466,9 @@ class GolfURDFGenerator:
 
             # Upper Arm
             ua_len = p.upper_arm.length
-            I_ua = UnitInertia.SolidCylinder(p.upper_arm.radius, ua_len, np.array([0., 0., 1.]))
+            I_ua = UnitInertia.SolidCylinder(
+                p.upper_arm.radius, ua_len, np.array([0.0, 0.0, 1.0])
+            )
 
             self.add_link(
                 f"{side}_upper_arm",
@@ -481,7 +483,7 @@ class GolfURDFGenerator:
                 "fixed",
                 f"{side}_shoulder_roll_link",
                 f"{side}_upper_arm",
-                RigidTransform(p=np.array([0., 0., -ua_len / 2.0])),
+                RigidTransform(p=np.array([0.0, 0.0, -ua_len / 2.0])),
             )
 
             # Elbow
@@ -491,13 +493,15 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_upper_arm",
                 f"{side}_forearm",
-                RigidTransform(p=np.array([0., 0., -ua_len / 2.0])),
+                RigidTransform(p=np.array([0.0, 0.0, -ua_len / 2.0])),
                 p.elbow_axis,
             )
 
             # Forearm
             fa_len = p.forearm.length
-            I_fa = UnitInertia.SolidCylinder(p.forearm.radius, fa_len, np.array([0., 0., 1.]))
+            I_fa = UnitInertia.SolidCylinder(
+                p.forearm.radius, fa_len, np.array([0.0, 0.0, 1.0])
+            )
             fa_offset = np.array([0.0, 0.0, fa_len / 2.0])
 
             self.add_link(
@@ -515,7 +519,9 @@ class GolfURDFGenerator:
             )
 
             hand_len = p.hand.length
-            I_hand = UnitInertia.SolidCylinder(p.hand.radius, hand_len, np.array([0., 0., 1.]))
+            I_hand = UnitInertia.SolidCylinder(
+                p.hand.radius, hand_len, np.array([0.0, 0.0, 1.0])
+            )
             hand_offset = np.array([0.0, 0.0, hand_len / 2.0])
             self.add_link(
                 f"{side}_hand",
@@ -531,7 +537,7 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_forearm",
                 f"{side}_wrist_dummy",
-                RigidTransform(p=np.array([0., 0., fa_len])),
+                RigidTransform(p=np.array([0.0, 0.0, fa_len])),
                 p.wrist_axis_1,
             )
             self.add_joint(
@@ -545,7 +551,9 @@ class GolfURDFGenerator:
 
         # 6. Club (Attached to Left Hand)
         c_len = p.club.length
-        I_club = UnitInertia.SolidCylinder(p.club.radius, c_len, np.array([0., 0., 1.]))
+        I_club = UnitInertia.SolidCylinder(
+            p.club.radius, c_len, np.array([0.0, 0.0, 1.0])
+        )
         # Grip at butt (start of cylinder in link frame), COM at L/2
         club_com_offset = np.array([0.0, 0.0, c_len / 2.0])
 
@@ -564,7 +572,7 @@ class GolfURDFGenerator:
             "fixed",
             "left_hand",
             "club",
-            RigidTransform(p=np.array([0., 0., p.hand.length])),
+            RigidTransform(p=np.array([0.0, 0.0, p.hand.length])),
         )
 
         xml_str = ET.tostring(self.root, encoding="utf-8")
@@ -589,7 +597,7 @@ def add_ground_and_club_contact(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
     plant.RegisterCollisionGeometry(
-        world_body, X_WG, HalfSpace(), "ground_collision", friction  # type: ignore[arg-type]  # Drake's type stubs are too strict; friction is accepted at runtime.
+        world_body, X_WG, HalfSpace(), "ground_collision", friction
     )
     # Add Visual for ground with color
     plant.RegisterVisualGeometry(
@@ -599,7 +607,7 @@ def add_ground_and_club_contact(
     # Clubhead collision sphere
     X_C_H = RigidTransform(p=np.array([0.0, 0.0, params.club.length / 2.0]))
     plant.RegisterCollisionGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction  # type: ignore[arg-type]  # pydrake's type stubs for RegisterCollisionGeometry are incomplete: friction argument is accepted at runtime.
+        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
     )
     plant.RegisterVisualGeometry(
         club,

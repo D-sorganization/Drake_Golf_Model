@@ -34,6 +34,7 @@ GOLF_BALL_LIFT_COEFFICIENT: float = (
 )
 
 # Club specifications
+# Note: Constants consolidated from constants_file.py (file removed in refactor)
 DRIVER_LENGTH_MAX_M: float = 1.1684  # [m] USGA Rule 1-1c (46 inches)
 DRIVER_LOFT_TYPICAL_DEG: float = 10.5  # [degrees] Modern driver average
 IRON_LOFT_RANGE_DEG: tuple[float, float] = (18.0, 64.0)  # [degrees] 2-iron to lob wedge
