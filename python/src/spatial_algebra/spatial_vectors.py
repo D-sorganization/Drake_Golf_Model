@@ -194,10 +194,7 @@ def spatial_cross(  # noqa: PLR0915
         wy = w2 * ul0 - w0 * ul2
         wz = w0 * ul1 - w1 * ul0
 
-        return np.array([
-            rx, ry, rz,
-            vx + wx, vy + wy, vz + wz
-        ])
+        return np.array([rx, ry, rz, vx + wx, vy + wy, vz + wz])
 
     if cross_type == "force":
         # crf(v) * u = [w x u_rot + v_lin x u_lin; w x u_lin]
@@ -218,10 +215,7 @@ def spatial_cross(  # noqa: PLR0915
         wy = w2 * ul0 - w0 * ul2
         wz = w0 * ul1 - w1 * ul0
 
-        return np.array([
-            rx + vx, ry + vy, rz + vz,
-            wx, wy, wz
-        ])
+        return np.array([rx + vx, ry + vy, rz + vz, wx, wy, wz])
 
     # Runtime check for invalid cross_type
     # Note: mypy flags this as unreachable due to Literal type, but it's needed for runtime safety
