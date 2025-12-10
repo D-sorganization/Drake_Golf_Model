@@ -125,7 +125,7 @@ def crf(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return np.block([[w_skew, v_skew], [np.zeros((3, 3)), w_skew]])
 
 
-def spatial_cross(
+def spatial_cross(  # noqa: PLR0915
     v: npt.NDArray[np.float64],
     u: npt.NDArray[np.float64],
     cross_type: Literal["motion", "force"] = "motion",
@@ -133,7 +133,9 @@ def spatial_cross(
     """
     Compute spatial cross product.
 
-    This is a convenience function that uses crm or crf operators.
+    This function implements the spatial cross product directly without
+    constructing the intermediate 6x6 matrices (crm/crf), providing
+    better performance.
 
     Args:
         v: 6x1 spatial motion vector [angular; linear]
@@ -167,10 +169,54 @@ def spatial_cross(
         msg = f"u must be 6x1 spatial vector, got shape {u.shape}"
         raise ValueError(msg)
 
+    # Decompose vectors: v = [w; v_lin], u = [u_rot; u_lin]
+    # We use manual cross product calculation for performance (avoiding np.cross overhead)
+    w0, w1, w2 = v[0], v[1], v[2]
+    v0, v1, v2 = v[3], v[4], v[5]
+    ur0, ur1, ur2 = u[0], u[1], u[2]
+    ul0, ul1, ul2 = u[3], u[4], u[5]
+
     if cross_type == "motion":
-        return crm(v) @ u
+        # crm(v) * u = [w x u_rot; v_lin x u_rot + w x u_lin]
+
+        # w x u_rot
+        rx = w1 * ur2 - w2 * ur1
+        ry = w2 * ur0 - w0 * ur2
+        rz = w0 * ur1 - w1 * ur0
+
+        # v_lin x u_rot
+        vx = v1 * ur2 - v2 * ur1
+        vy = v2 * ur0 - v0 * ur2
+        vz = v0 * ur1 - v1 * ur0
+
+        # w x u_lin
+        wx = w1 * ul2 - w2 * ul1
+        wy = w2 * ul0 - w0 * ul2
+        wz = w0 * ul1 - w1 * ul0
+
+        return np.array([rx, ry, rz, vx + wx, vy + wy, vz + wz])
+
     if cross_type == "force":
-        return crf(v) @ u
+        # crf(v) * u = [w x u_rot + v_lin x u_lin; w x u_lin]
+        # Note: For force vectors, u_rot is torque/moment, u_lin is force
+
+        # w x u_rot
+        rx = w1 * ur2 - w2 * ur1
+        ry = w2 * ur0 - w0 * ur2
+        rz = w0 * ur1 - w1 * ur0
+
+        # v_lin x u_lin
+        vx = v1 * ul2 - v2 * ul1
+        vy = v2 * ul0 - v0 * ul2
+        vz = v0 * ul1 - v1 * ul0
+
+        # w x u_lin
+        wx = w1 * ul2 - w2 * ul1
+        wy = w2 * ul0 - w0 * ul2
+        wz = w0 * ul1 - w1 * ul0
+
+        return np.array([rx + vx, ry + vy, rz + vz, wx, wy, wz])
+
     # Runtime check for invalid cross_type
     # Note: mypy flags this as unreachable due to Literal type, but it's needed for runtime safety
     msg = f"cross_type must be 'motion' or 'force', got '{cross_type}'"  # type: ignore[unreachable]
