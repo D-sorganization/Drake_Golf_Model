@@ -14,11 +14,12 @@ try:
     )
     from .logger_utils import setup_logging
 except ImportError:
-    from drake_golf_model import (
+    # Fallback imports for direct script execution (when run as __main__)
+    from drake_golf_model import (  # type: ignore[no-redef]
         GolfModelParams,
         build_golf_swing_diagram,
     )
-    from logger_utils import setup_logging
+    from logger_utils import setup_logging  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
