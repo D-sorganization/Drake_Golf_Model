@@ -169,9 +169,15 @@ def make_cylinder_inertia(mass: float, radius: float, length: float) -> SpatialI
     # UnitInertia.SolidCylinder creates a UnitInertia.
     # The cylinder is aligned with Z axis by default in pydrake's SolidCylinder.
     # Axis argument [0, 0, 1] confirms alignment.
-    unit_inertia = UnitInertia.SolidCylinder(radius, length, np.array([0.0, 0.0, 1.0]))
+    unit_inertia = UnitInertia.SolidCylinder(
+        radius, length, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
+    )
     # Construct SpatialInertia using mass, center of mass at [0, 0, 0], and the unit inertia.
-    return SpatialInertia(mass, np.zeros(3), unit_inertia)
+    return SpatialInertia(
+        mass,
+        np.zeros(3, dtype=np.float64),  # type: ignore[arg-type]
+        unit_inertia,
+    )
 
 
 class GolfURDFGenerator:
@@ -355,7 +361,9 @@ class GolfURDFGenerator:
             "revolute",
             "lower_spine",
             "upper_spine",
-            RigidTransform(p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.25])),
+            RigidTransform(
+                p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.25], dtype=np.float64)  # type: ignore[arg-type]
+            ),
             p.spine_twist_axis,
         )
 
@@ -370,7 +378,9 @@ class GolfURDFGenerator:
             "fixed",
             "upper_spine",
             "upper_torso_hub",
-            RigidTransform(p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.5])),
+            RigidTransform(
+                p=np.array([0.0, 0.0, p.pelvis_to_shoulders * 0.5], dtype=np.float64)  # type: ignore[arg-type]
+            ),
         )
 
         # 5. Arms
@@ -378,16 +388,18 @@ class GolfURDFGenerator:
             sign = 1.0 if side == "right" else -1.0
 
             # Scapula
-            scap_offset = np.array([0.0, sign * 0.18, 0.10])
+            scap_offset = np.array([0.0, sign * 0.18, 0.10], dtype=np.float64)
             scap_len = p.scapula_rod.length
 
             self.add_link(
                 f"{side}_scapula_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01)
             )
 
-            scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0])
+            scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0], dtype=np.float64)
             I_scap = UnitInertia.SolidCylinder(
-                p.scapula_rod.radius, scap_len, np.array([0.0, 0.0, 1.0])
+                p.scapula_rod.radius,
+                scap_len,
+                np.array([0.0, 0.0, 1.0], dtype=np.float64),  # type: ignore[arg-type]
             )
             self.add_link(
                 f"{side}_scapula_rod",
@@ -403,7 +415,7 @@ class GolfURDFGenerator:
                 "revolute",
                 "upper_torso_hub",
                 f"{side}_scapula_dummy",
-                RigidTransform(p=scap_offset),
+                RigidTransform(p=scap_offset),  # type: ignore[arg-type]
                 p.scap_axis_1,
             )
             self.add_joint(
@@ -428,7 +440,9 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_scapula_rod",
                 f"{side}_shoulder_yaw_link",
-                RigidTransform(p=np.array([0.0, 0.0, scap_len])),
+                RigidTransform(
+                    p=np.array([0.0, 0.0, scap_len], dtype=np.float64)  # type: ignore[arg-type]
+                ),
                 p.shoulder_axes[0],
             )
 
@@ -467,7 +481,7 @@ class GolfURDFGenerator:
             # Upper Arm
             ua_len = p.upper_arm.length
             I_ua = UnitInertia.SolidCylinder(
-                p.upper_arm.radius, ua_len, np.array([0.0, 0.0, 1.0])
+                p.upper_arm.radius, ua_len, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
             )
 
             self.add_link(
@@ -483,7 +497,9 @@ class GolfURDFGenerator:
                 "fixed",
                 f"{side}_shoulder_roll_link",
                 f"{side}_upper_arm",
-                RigidTransform(p=np.array([0.0, 0.0, -ua_len / 2.0])),
+                RigidTransform(
+                    p=np.array([0.0, 0.0, -ua_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
+                ),
             )
 
             # Elbow
@@ -493,16 +509,18 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_upper_arm",
                 f"{side}_forearm",
-                RigidTransform(p=np.array([0.0, 0.0, -ua_len / 2.0])),
+                RigidTransform(
+                    p=np.array([0.0, 0.0, -ua_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
+                ),
                 p.elbow_axis,
             )
 
             # Forearm
             fa_len = p.forearm.length
             I_fa = UnitInertia.SolidCylinder(
-                p.forearm.radius, fa_len, np.array([0.0, 0.0, 1.0])
+                p.forearm.radius, fa_len, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
             )
-            fa_offset = np.array([0.0, 0.0, fa_len / 2.0])
+            fa_offset = np.array([0.0, 0.0, fa_len / 2.0], dtype=np.float64)
 
             self.add_link(
                 f"{side}_forearm",
@@ -520,9 +538,11 @@ class GolfURDFGenerator:
 
             hand_len = p.hand.length
             I_hand = UnitInertia.SolidCylinder(
-                p.hand.radius, hand_len, np.array([0.0, 0.0, 1.0])
+                p.hand.radius,
+                hand_len,
+                np.array([0.0, 0.0, 1.0], dtype=np.float64),  # type: ignore[arg-type]
             )
-            hand_offset = np.array([0.0, 0.0, hand_len / 2.0])
+            hand_offset = np.array([0.0, 0.0, hand_len / 2.0], dtype=np.float64)
             self.add_link(
                 f"{side}_hand",
                 p.hand.mass,
@@ -537,7 +557,9 @@ class GolfURDFGenerator:
                 "revolute",
                 f"{side}_forearm",
                 f"{side}_wrist_dummy",
-                RigidTransform(p=np.array([0.0, 0.0, fa_len])),
+                RigidTransform(
+                    p=np.array([0.0, 0.0, fa_len], dtype=np.float64)  # type: ignore[arg-type]
+                ),
                 p.wrist_axis_1,
             )
             self.add_joint(
@@ -552,10 +574,10 @@ class GolfURDFGenerator:
         # 6. Club (Attached to Left Hand)
         c_len = p.club.length
         I_club = UnitInertia.SolidCylinder(
-            p.club.radius, c_len, np.array([0.0, 0.0, 1.0])
+            p.club.radius, c_len, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
         )
         # Grip at butt (start of cylinder in link frame), COM at L/2
-        club_com_offset = np.array([0.0, 0.0, c_len / 2.0])
+        club_com_offset = np.array([0.0, 0.0, c_len / 2.0], dtype=np.float64)
 
         self.add_link(
             "club",
@@ -572,7 +594,9 @@ class GolfURDFGenerator:
             "fixed",
             "left_hand",
             "club",
-            RigidTransform(p=np.array([0.0, 0.0, p.hand.length])),
+            RigidTransform(
+                p=np.array([0.0, 0.0, p.hand.length], dtype=np.float64)  # type: ignore[arg-type]
+            ),
         )
 
         xml_str = ET.tostring(self.root, encoding="utf-8")
@@ -597,24 +621,38 @@ def add_ground_and_club_contact(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
     plant.RegisterCollisionGeometry(
-        world_body, X_WG, HalfSpace(), "ground_collision", friction
+        world_body,
+        X_WG,
+        HalfSpace(),
+        "ground_collision",
+        friction,  # type: ignore[arg-type]
     )
     # Add Visual for ground with color
     plant.RegisterVisualGeometry(
-        world_body, X_WG, HalfSpace(), "ground_visual", np.array([0.3, 0.3, 0.3, 1.0])
+        world_body,
+        X_WG,
+        HalfSpace(),
+        "ground_visual",
+        np.array([0.3, 0.3, 0.3, 1.0], dtype=np.float64),  # type: ignore[arg-type]
     )
 
     # Clubhead collision sphere
-    X_C_H = RigidTransform(p=np.array([0.0, 0.0, params.club.length / 2.0]))
+    X_C_H = RigidTransform(
+        p=np.array([0.0, 0.0, params.club.length / 2.0], dtype=np.float64)  # type: ignore[arg-type]
+    )
     plant.RegisterCollisionGeometry(
-        club, X_C_H, Sphere(params.clubhead_radius), "clubhead_collision", friction
+        club,
+        X_C_H,
+        Sphere(params.clubhead_radius),
+        "clubhead_collision",
+        friction,  # type: ignore[arg-type]
     )
     plant.RegisterVisualGeometry(
         club,
         X_C_H,
         Sphere(params.clubhead_radius),
         "clubhead_visual",
-        np.array([1.0, 0.0, 0.0, 1.0]),
+        np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float64),  # type: ignore[arg-type]
     )
 
 
