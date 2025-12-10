@@ -388,14 +388,14 @@ class GolfURDFGenerator:
             sign = 1.0 if side == "right" else -1.0
 
             # Scapula
-            scap_offset = np.array([0.0, sign * 0.18, 0.10], dtype=np.float64)
+            scap_offset = np.array([0.0, sign * 0.18, 0.10], dtype=np.float64)  # type: ignore[arg-type]
             scap_len = p.scapula_rod.length
 
             self.add_link(
                 f"{side}_scapula_dummy", self.dummy_mass, UnitInertia.SolidSphere(0.01)
             )
 
-            scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0], dtype=np.float64)
+            scap_body_offset = np.array([0.0, 0.0, scap_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
             I_scap = UnitInertia.SolidCylinder(
                 p.scapula_rod.radius,
                 scap_len,
@@ -520,7 +520,7 @@ class GolfURDFGenerator:
             I_fa = UnitInertia.SolidCylinder(
                 p.forearm.radius, fa_len, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
             )
-            fa_offset = np.array([0.0, 0.0, fa_len / 2.0], dtype=np.float64)
+            fa_offset = np.array([0.0, 0.0, fa_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
 
             self.add_link(
                 f"{side}_forearm",
@@ -542,7 +542,7 @@ class GolfURDFGenerator:
                 hand_len,
                 np.array([0.0, 0.0, 1.0], dtype=np.float64),  # type: ignore[arg-type]
             )
-            hand_offset = np.array([0.0, 0.0, hand_len / 2.0], dtype=np.float64)
+            hand_offset = np.array([0.0, 0.0, hand_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
             self.add_link(
                 f"{side}_hand",
                 p.hand.mass,
@@ -577,7 +577,7 @@ class GolfURDFGenerator:
             p.club.radius, c_len, np.array([0.0, 0.0, 1.0], dtype=np.float64)  # type: ignore[arg-type]
         )
         # Grip at butt (start of cylinder in link frame), COM at L/2
-        club_com_offset = np.array([0.0, 0.0, c_len / 2.0], dtype=np.float64)
+        club_com_offset = np.array([0.0, 0.0, c_len / 2.0], dtype=np.float64)  # type: ignore[arg-type]
 
         self.add_link(
             "club",
