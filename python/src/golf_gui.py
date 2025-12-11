@@ -60,6 +60,13 @@ def main() -> None:
     logger.info("Running simulation for %.1f seconds...", duration)
     simulator.AdvanceTo(duration)
     logger.info("Simulation complete.")
+    
+    # Keep the process alive to allow visualization inspection
+    logger.info("Keep-alive: Press Enter to exit...")
+    try:
+        input()
+    except EOFError:
+        pass  # Handle non-interactive environments gracefully
 
 
 if __name__ == "__main__":
