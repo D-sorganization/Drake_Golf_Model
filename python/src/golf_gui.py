@@ -55,10 +55,24 @@ def main() -> None:
 
     logger.info("Simulation initialized. Ready to run.")
 
+    # Add UX controls
+    meshcat.AddSlider("Realtime Rate", 0.1, 2.0, 0.1, 1.0)
+
     # Run simulation
     duration = 2.0
     logger.info("Running simulation for %.1f seconds...", duration)
-    simulator.AdvanceTo(duration)
+
+    step_size = 0.1
+    context = simulator.get_mutable_context()
+
+    while context.get_time() < duration:
+        # UX: Update Realtime Rate from Meshcat slider
+        rate = meshcat.GetSliderValue("Realtime Rate")
+        simulator.set_target_realtime_rate(rate)
+
+        next_time = min(context.get_time() + step_size, duration)
+        simulator.AdvanceTo(next_time)
+
     logger.info("Simulation complete.")
 
 
