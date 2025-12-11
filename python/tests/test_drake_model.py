@@ -3,12 +3,16 @@
 Tests model building, parameter validation, and model structure.
 """
 
+import sys
+
 import numpy as np
 import pytest
 
 # Try to import drake_golf_model, skip all tests if pydrake is not available
 # Note: pythonpath is configured in pytest.ini to include the parent directory
 try:
+    from pydrake.multibody.tree import SpatialInertia
+
     from python.src.drake_golf_model import (
         GolfModelParams,
         SegmentParams,
@@ -17,6 +21,11 @@ try:
     )
 except ImportError as e:
     # Skip all tests if pydrake is not available
+    # We define dummy SpatialInertia to allow test collection implicitly,
+    # but the whole file will likely need pytest skipping mechanism if we want
+    # to run tests selectively.
+    # However, existing pattern is to skip if import fails.
+    SpatialInertia = None
     import pytest
 
     pytest.skip(f"pydrake not available: {e}", allow_module_level=True)
@@ -93,14 +102,13 @@ class TestCylinderInertia:
 
     def test_make_cylinder_inertia_positive(self) -> None:
         """Test cylinder inertia with positive parameters."""
-        # This test requires Drake to be available
-        try:
-            from pydrake.multibody.tree import SpatialInertia
-
-            inertia = make_cylinder_inertia(mass=1.0, radius=0.05, length=1.0)
-            assert isinstance(inertia, SpatialInertia)
-        except ImportError:
+        # This test requires Drake to be available if we were creating raw objects,
+        # but 'make_cylinder_inertia' returns a SpatialInertia which we import for verification.
+        if "pydrake" not in sys.modules:
             pytest.skip("Drake not available")
+
+        inertia = make_cylinder_inertia(mass=1.0, radius=0.05, length=1.0)
+        assert isinstance(inertia, SpatialInertia)
 
     def test_make_cylinder_inertia_zero_mass(self) -> None:
         """Test cylinder inertia with zero mass raises error."""

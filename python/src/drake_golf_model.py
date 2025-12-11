@@ -1,7 +1,7 @@
 # drake_golf_model.py
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
-import xml.etree.ElementTree as ET  # noqa: N817  # ET is the standard alias for ElementTree in Python XML processing
+import xml.etree.ElementTree as ET  # ET is the standard alias for ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
