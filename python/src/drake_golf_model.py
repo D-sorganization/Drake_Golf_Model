@@ -667,20 +667,23 @@ def add_joint_actuators(plant: MultibodyPlant) -> None:
 
 def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
-    urdf_path: str = "golf_model.urdf",
+    urdf_path: str | None = None,
     meshcat: Meshcat | None = None,
 ) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
     """Build the full Drake diagram for the golf swing."""
     # Generate URDF
     generator = GolfURDFGenerator(params)
     urdf_content = generator.generate()
-    Path(urdf_path).write_text(urdf_content, encoding="utf-8")
+
+    if urdf_path:
+        Path(urdf_path).write_text(urdf_content, encoding="utf-8")
 
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=1e-3)
 
     parser = Parser(plant)
-    model_instance = parser.AddModels(Path(urdf_path))[0]
+    # Load from string to avoid file system dependency/side effects
+    model_instance = parser.AddModelsFromString(urdf_content, "urdf")[0]
 
     # Add Right Hand Constraint
     right_hand = plant.GetBodyByName("right_hand", model_instance)
