@@ -30,12 +30,23 @@ def skew(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         >>> np.allclose(S @ u, np.cross(v, u))
         True
     """
-    v = np.asarray(v).flatten()
+    # Performance optimization: use ravel() instead of flatten() to avoid copy
+    v = np.asarray(v).ravel()
     if v.shape != (3,):
         msg = f"Input must be 3x1 vector, got shape {v.shape}"
         raise ValueError(msg)
 
-    return np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    # Performance optimization: manual assignment is faster than np.array creation
+    v0, v1, v2 = v[0], v[1], v[2]
+    res = np.zeros((3, 3), dtype=np.float64)
+    res[0, 1] = -v2
+    res[0, 2] = v1
+    res[1, 0] = v2
+    res[1, 2] = -v0
+    res[2, 0] = -v1
+    res[2, 1] = v0
+
+    return res
 
 
 def crm(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -67,18 +78,42 @@ def crm(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         >>> X.shape
         (6, 6)
     """
-    v = np.asarray(v).flatten()
+    v = np.asarray(v).ravel()
     if v.shape != (6,):
         msg = f"Input must be 6x1 spatial vector, got shape {v.shape}"
         raise ValueError(msg)
 
-    w = v[:3]  # Angular velocity
-    vlin = v[3:]  # Linear velocity
+    w0, w1, w2 = v[0], v[1], v[2]
+    v0, v1, v2 = v[3], v[4], v[5]
 
-    w_skew = skew(w)
-    v_skew = skew(vlin)
+    # Performance optimization: manual construction avoids np.block and intermediate arrays
+    res = np.zeros((6, 6), dtype=np.float64)
 
-    return np.block([[w_skew, np.zeros((3, 3))], [v_skew, w_skew]])
+    # Top-left block: skew(w)
+    res[0, 1] = -w2
+    res[0, 2] = w1
+    res[1, 0] = w2
+    res[1, 2] = -w0
+    res[2, 0] = -w1
+    res[2, 1] = w0
+
+    # Bottom-left block: skew(v_lin)
+    res[3, 1] = -v2
+    res[3, 2] = v1
+    res[4, 0] = v2
+    res[4, 2] = -v0
+    res[5, 0] = -v1
+    res[5, 1] = v0
+
+    # Bottom-right block: skew(w)
+    res[3, 4] = -w2
+    res[3, 5] = w1
+    res[4, 3] = w2
+    res[4, 5] = -w0
+    res[5, 3] = -w1
+    res[5, 4] = w0
+
+    return res
 
 
 def crf(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -111,18 +146,42 @@ def crf(v: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         >>> np.allclose(X_crf, -X_crm.T)
         True
     """
-    v = np.asarray(v).flatten()
+    v = np.asarray(v).ravel()
     if v.shape != (6,):
         msg = f"Input must be 6x1 spatial vector, got shape {v.shape}"
         raise ValueError(msg)
 
-    w = v[:3]  # Angular velocity
-    vlin = v[3:]  # Linear velocity
+    w0, w1, w2 = v[0], v[1], v[2]
+    v0, v1, v2 = v[3], v[4], v[5]
 
-    w_skew = skew(w)
-    v_skew = skew(vlin)
+    # Performance optimization: manual construction avoids np.block and intermediate arrays
+    res = np.zeros((6, 6), dtype=np.float64)
 
-    return np.block([[w_skew, v_skew], [np.zeros((3, 3)), w_skew]])
+    # Top-left block: skew(w)
+    res[0, 1] = -w2
+    res[0, 2] = w1
+    res[1, 0] = w2
+    res[1, 2] = -w0
+    res[2, 0] = -w1
+    res[2, 1] = w0
+
+    # Top-right block: skew(v_lin)
+    res[0, 4] = -v2
+    res[0, 5] = v1
+    res[1, 3] = v2
+    res[1, 5] = -v0
+    res[2, 3] = -v1
+    res[2, 4] = v0
+
+    # Bottom-right block: skew(w)
+    res[3, 4] = -w2
+    res[3, 5] = w1
+    res[4, 3] = w2
+    res[4, 5] = -w0
+    res[5, 3] = -w1
+    res[5, 4] = w0
+
+    return res
 
 
 def spatial_cross(  # noqa: PLR0915
@@ -159,8 +218,8 @@ def spatial_cross(  # noqa: PLR0915
         >>> f = np.array([0, 0, 10, 0, 0, 0])  # Force/torque
         >>> f_transformed = spatial_cross(v, f, 'force')
     """
-    v = np.asarray(v).flatten()
-    u = np.asarray(u).flatten()
+    v = np.asarray(v).ravel()
+    u = np.asarray(u).ravel()
 
     if v.shape != (6,):
         msg = f"v must be 6x1 spatial vector, got shape {v.shape}"
