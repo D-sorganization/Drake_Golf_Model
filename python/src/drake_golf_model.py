@@ -35,7 +35,7 @@ try:
     )
 except ImportError:
     # Fallback to absolute import when run/imported as script
-    from constants import (
+    from constants import (  # type: ignore[no-redef]
         GOLF_BALL_DIAMETER_M,
     )
 
