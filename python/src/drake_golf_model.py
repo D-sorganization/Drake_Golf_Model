@@ -1,7 +1,7 @@
 # drake_golf_model.py
 """Drake Golf Model URDF Generator and Diagram Builder."""
 
-import xml.etree.ElementTree as ET  # noqa: N817  # ET is the standard alias for ElementTree in Python XML processing
+import xml.etree.ElementTree as ET  # noqa: N817, RUF100
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any  # noqa: ICN003
@@ -29,9 +29,15 @@ from pydrake.all import (
     UnitInertia,
 )
 
-from .constants import (
-    GOLF_BALL_DIAMETER_M,
-)
+try:
+    from .constants import (
+        GOLF_BALL_DIAMETER_M,
+    )
+except ImportError:
+    # Fallback to absolute import when run/imported as script
+    from constants import (  # type: ignore[no-redef]
+        GOLF_BALL_DIAMETER_M,
+    )
 
 __all__ = [
     "GolfModelParams",

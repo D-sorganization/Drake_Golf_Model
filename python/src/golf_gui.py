@@ -1,5 +1,6 @@
 """Golf Analysis Suite GUI Entry Point."""
 
+import contextlib
 import logging
 
 from pydrake.all import (
@@ -74,6 +75,11 @@ def main() -> None:
         simulator.AdvanceTo(next_time)
 
     logger.info("Simulation complete.")
+
+    # Keep the process alive to allow visualization inspection
+    logger.info("Keep-alive: Press Enter to exit...")
+    with contextlib.suppress(EOFError):
+        input()
 
 
 if __name__ == "__main__":
