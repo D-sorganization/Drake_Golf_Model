@@ -4,8 +4,9 @@ import contextlib
 import logging
 
 from pydrake.all import (
+    Meshcat,
+    MeshcatParams,
     Simulator,
-    StartMeshcat,
 )
 
 try:
@@ -32,7 +33,11 @@ def main() -> None:
 
     # Start Meshcat
     try:
-        meshcat = StartMeshcat()
+        # Security: Bind to localhost to prevent exposure to the network
+        meshcat_params = MeshcatParams()
+        meshcat_params.host = "localhost"
+        meshcat = Meshcat(meshcat_params)
+
         logger.info("Meshcat server started at: %s", meshcat.web_url())
     except Exception:
         logger.exception(
