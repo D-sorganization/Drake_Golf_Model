@@ -39,7 +39,7 @@ def _run_simulation_loop(
     reset_clicks = 0
     pause_clicks = 0
     is_paused = False
-    step_size = 0.1
+    step_size = 0.01
 
     logger.info("Running simulation loop. Use GUI controls to Reset/Pause.")
 
@@ -106,8 +106,8 @@ def main() -> None:
 
     # Add UX controls
     meshcat.AddSlider("Realtime Rate", 0.1, 2.0, 0.1, 1.0)
-    meshcat.AddButton("Reset")
-    meshcat.AddButton("Pause")
+    meshcat.AddButton("Reset", "KeyR")
+    meshcat.AddButton("Pause", "KeyP")
 
     # Run simulation
     duration = 2.0
