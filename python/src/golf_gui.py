@@ -87,7 +87,7 @@ def main() -> None:
             "Failed to start Meshcat. Common causes include:\n"
             "- Port already in use (try closing other Meshcat sessions or rebooting)\n"
             "- Missing or incompatible Meshcat/Drake dependencies\n"
-            "- Firewall or network restrictions"
+            "- Firewall or network restrictions",
         )
         return
 
