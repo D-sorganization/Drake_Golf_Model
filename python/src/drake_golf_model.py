@@ -11,6 +11,7 @@ import numpy as np
 import numpy.typing as npt
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
+    Box,
     CoulombFriction,
     Diagram,
     DiagramBuilder,
@@ -621,7 +622,11 @@ def add_ground_and_club_contact(
 ) -> None:
     """Add ground and club contact geometry to the plant."""
     world_body = plant.world_body()
-    X_WG = RigidTransform()
+    # Replace HalfSpace with a large Box for better visualization and contact support
+    # Box is 50x50m and 1m deep, entered at z=-0.5 so top surface is at z=0
+    ground_size = np.array([50.0, 50.0, 1.0])
+    ground_shape = Box(ground_size[0], ground_size[1], ground_size[2])
+    X_WG = RigidTransform(p=np.array([0.0, 0.0, -0.5]))
 
     friction = CoulombFriction(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
@@ -629,17 +634,17 @@ def add_ground_and_club_contact(
     plant.RegisterCollisionGeometry(
         world_body,
         X_WG,
-        HalfSpace(),
+        ground_shape,
         "ground_collision",
         friction,  # type: ignore[arg-type]
     )
-    # Add Visual for ground with color
+    # Add Visual for ground with color (Green for golf)
     plant.RegisterVisualGeometry(
         world_body,
         X_WG,
-        HalfSpace(),
+        ground_shape,
         "ground_visual",
-        np.array([0.3, 0.3, 0.3, 1.0], dtype=np.float64),  # type: ignore[arg-type]
+        np.array([0.2, 0.8, 0.2, 1.0], dtype=np.float64),  # type: ignore[arg-type]
     )
 
     # Clubhead collision sphere
