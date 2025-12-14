@@ -12,7 +12,7 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
-except (ImportError, OSError):
+except ImportError:
     TORCH_AVAILABLE = False
 
 # Reproducibility constants
