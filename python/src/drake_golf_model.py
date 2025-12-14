@@ -11,6 +11,7 @@ import numpy as np
 import numpy.typing as npt
 from pydrake.all import (
     AddMultibodyPlantSceneGraph,
+    Box,
     CoulombFriction,
     Diagram,
     DiagramBuilder,
@@ -634,10 +635,13 @@ def add_ground_and_club_contact(
         friction,  # type: ignore[arg-type]
     )
     # Add Visual for ground with color
+    # Use a large Box instead of HalfSpace for better compatibility with Meshcat
+    ground_box = Box(100.0, 100.0, 1.0)
+    X_WG_visual = RigidTransform(p=np.array([0, 0, -0.5]))
     plant.RegisterVisualGeometry(
         world_body,
-        X_WG,
-        HalfSpace(),
+        X_WG_visual,
+        ground_box,
         "ground_visual",
         np.array([0.3, 0.3, 0.3, 1.0], dtype=np.float64),  # type: ignore[arg-type]
     )

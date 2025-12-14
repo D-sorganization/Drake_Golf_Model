@@ -9,6 +9,8 @@ from pydrake.all import (
     Diagram,
     Meshcat,
     MeshcatParams,
+    MultibodyPlant,
+    RigidTransform,
     Simulator,
 )
 
@@ -32,14 +34,59 @@ STEP_SIZE_S: typing.Final[float] = 0.01  # [s] Simulation time step for 100Hz up
 SLEEP_DURATION_S: typing.Final[float] = 0.05  # [s] Sleep to prevent busy-wait (20Hz)
 
 
+def initialize_simulation_state(plant: MultibodyPlant, context: Context) -> None:
+    """Initialize the simulation state with the model above ground.
+
+    Args:
+        plant: The MultibodyPlant of the model.
+        context: The root context of the Diagram (will be used to get plant context).
+    """
+    plant_context = plant.GetMyContextFromRoot(context)
+
+    # Get the pelvis body (root link)
+    # Note: Using GetBodyByName might fail if the model instance is strict,
+    # but we only have one model here.
+    pelvis = plant.GetBodyByName("pelvis")
+
+    # Set initial pose: 1.0m above ground to prevent intersection
+    pelvis_pose = RigidTransform(p=[0, 0, 1.0])
+    plant.SetFreeBodyPose(plant_context, pelvis, pelvis_pose)
+
+
+def _reset_simulation(
+    simulator: Simulator,
+    diagram: Diagram,
+    plant: MultibodyPlant,
+    context: Context,
+) -> None:
+    """Reset the simulation to its initial state."""
+    logger.info("UX: Resetting simulation...")
+
+    # 1) Set time to start (0.0)
+    context.SetTime(0.0)
+
+    # 2) Restore diagram default state
+    diagram.SetDefaultContext(context)
+
+    # 3) Reinitialize simulator integrator
+    simulator.Initialize()
+
+    # 4) Initialize model state (lift pelvis)
+    initialize_simulation_state(plant, context)
+
+    # 5) Publish diagram
+    diagram.Publish(context)
+
+
 def _run_simulation_loop(
     meshcat: Meshcat,
     simulator: Simulator,
     diagram: Diagram,
-    context: Context,
+    plant: MultibodyPlant,
     duration: float,
 ) -> None:
     """Run the main simulation loop with UX controls."""
+    context = simulator.get_mutable_context()
     reset_clicks = 0
     pause_clicks = 0
     stop_clicks = 0
@@ -58,18 +105,7 @@ def _run_simulation_loop(
         current_reset_clicks = meshcat.GetButtonClicks("Reset")
         if current_reset_clicks > reset_clicks:
             reset_clicks = current_reset_clicks
-            logger.info("UX: Resetting simulation...")
-
-            # Reset simulation state:
-            # 1) Set time to start (0.0) so simulation restarts from the beginning.
-            context.SetTime(0.0)
-
-            # 2) Restore diagram default state to reset all model variables and parameters.
-            #    SetDefaultContext resets the entire context (state, parameters, etc.) to defaults.
-            diagram.SetDefaultContext(context)
-
-            # 3) Reinitialize simulator integrator to ensure numerical state is consistent.
-            simulator.Initialize()
+            _reset_simulation(simulator, diagram, plant, context)
 
         # UX: Check Pause
         current_pause_clicks = meshcat.GetButtonClicks("Pause")
@@ -115,14 +151,19 @@ def main() -> None:
 
     # Build Diagram with Visualization
     params = GolfModelParams()
-    diagram, _, _ = build_golf_swing_diagram(params, meshcat=meshcat)
+    diagram, plant, _ = build_golf_swing_diagram(params, meshcat=meshcat)
 
     # create a simulator
     simulator = Simulator(diagram)
     simulator.set_target_realtime_rate(1.0)
 
     # Initialize
+    # Ensure simulator is initialized before use
+    simulator.Initialize()
     context = simulator.get_mutable_context()
+
+    # Set initial state
+    initialize_simulation_state(plant, context)
 
     logger.info("Simulation initialized. Ready to run.")
 
@@ -134,7 +175,7 @@ def main() -> None:
 
     # Run simulation
     duration = 2.0
-    _run_simulation_loop(meshcat, simulator, diagram, context, duration)
+    _run_simulation_loop(meshcat, simulator, diagram, plant, duration)
 
 
 if __name__ == "__main__":
