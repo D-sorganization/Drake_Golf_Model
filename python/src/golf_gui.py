@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 STEP_SIZE_S = 0.05
 
 # [m] Approximately standing height
-# Source: Winter, D. A. (2009). Biomechanics and motor control of human movement.
-#         Approximately 50th percentile male pelvis height.
+# Source: Design value. Chosen to represent an approximately 50th percentile
+#         male pelvis height (Winter, 2009 for reference).
 PELVIS_HEIGHT_M = 1.0
 
 # [s] Sleep duration when paused to prevent CPU spin
@@ -43,13 +43,14 @@ PELVIS_HEIGHT_M = 1.0
 PAUSE_SLEEP_S = 0.01
 
 
-def handle_ui_events(  # noqa: PLR0913
+def poll_ui_state(  # noqa: PLR0913
     meshcat: Meshcat,
     context: Context,
     simulator: Simulator,
     diagram: Diagram,
     initial_context: Context,
-    is_paused: bool,  # noqa: FBT001
+    *,
+    is_paused: bool,
     pause_clicks: int,
     stop_clicks: int,
     reset_clicks: int,
@@ -147,34 +148,39 @@ def main() -> None:  # noqa: PLR0915
     is_paused = False
 
     while True:
-        stop_triggered, is_paused, pause_clicks, stop_clicks, reset_clicks = (
-            handle_ui_events(
-                meshcat,
-                context,
-                simulator,
-                diagram,
-                initial_context,
-                is_paused,
-                pause_clicks,
-                stop_clicks,
-                reset_clicks,
+        try:
+            stop_triggered, is_paused, pause_clicks, stop_clicks, reset_clicks = (
+                poll_ui_state(
+                    meshcat,
+                    context,
+                    simulator,
+                    diagram,
+                    initial_context,
+                    is_paused=is_paused,
+                    pause_clicks=pause_clicks,
+                    stop_clicks=stop_clicks,
+                    reset_clicks=reset_clicks,
+                )
             )
-        )
 
-        if stop_triggered:
+            if stop_triggered:
+                break
+
+            # 3. Update Rate
+            rate = meshcat.GetSliderValue("Realtime Rate")
+            simulator.set_target_realtime_rate(rate)
+
+            # 4. Step Simulation
+            if not is_paused:
+                target_time = context.get_time() + STEP_SIZE_S
+                simulator.AdvanceTo(target_time)
+            else:
+                # Prevent CPU spin when paused
+                time.sleep(PAUSE_SLEEP_S)
+
+        except Exception:
+            logger.exception("An error occurred during the simulation loop.")
             break
-
-        # 3. Update Rate
-        rate = meshcat.GetSliderValue("Realtime Rate")
-        simulator.set_target_realtime_rate(rate)
-
-        # 4. Step Simulation
-        if not is_paused:
-            target_time = context.get_time() + STEP_SIZE_S
-            simulator.AdvanceTo(target_time)
-        else:
-            # Prevent CPU spin when paused
-            time.sleep(PAUSE_SLEEP_S)
 
 
 if __name__ == "__main__":
