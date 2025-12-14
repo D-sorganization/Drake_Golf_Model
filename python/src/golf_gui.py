@@ -123,9 +123,12 @@ def main() -> None:  # noqa: PLR0915
         # 2. Handle Pause
         curr_pause = meshcat.GetButtonClicks("Pause")
         if curr_pause > pause_clicks:
+            clicks_diff = curr_pause - pause_clicks
             pause_clicks = curr_pause
-            is_paused = not is_paused
-            logger.info("Visualizer: Paused = %s", is_paused)
+            # Only toggle if an odd number of clicks occurred (e.g., 1 click = toggle, 2 clicks = no net change)
+            if clicks_diff % 2 == 1:
+                is_paused = not is_paused
+                logger.info("Visualizer: Paused = %s", is_paused)
 
         # 3. Update Rate
         rate = meshcat.GetSliderValue("Realtime Rate")
