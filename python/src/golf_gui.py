@@ -44,7 +44,7 @@ PELVIS_HEIGHT_M = 1.0
 PAUSE_SLEEP_S = 0.01
 
 
-def poll_ui_state(  # noqa: PLR0913
+def poll_ui_state(  # noqa: PLR0913, type: ignore[no-any-unimported]
     meshcat: Meshcat,
     context: Context,
     diagram: Diagram,
