@@ -47,6 +47,7 @@ PAUSE_SLEEP_S = 0.01
 def poll_ui_state(  # noqa: PLR0913, type: ignore[no-any-unimported]
     meshcat: Meshcat,
     context: Context,
+    simulator: Simulator,
     diagram: Diagram,
     initial_context: Context,
     *,
@@ -68,6 +69,8 @@ def poll_ui_state(  # noqa: PLR0913, type: ignore[no-any-unimported]
         reset_clicks = curr_reset
         # Restore state from cloned context
         context.SetTimeStateAndParametersFrom(initial_context)
+        # Reset integrator internal state to match context
+        simulator.Initialize()
         # Force publish so view updates even if paused
         diagram.Publish(context)
         logger.info("Visualizer: Reset triggered.")
@@ -177,6 +180,7 @@ def main() -> None:  # noqa: PLR0915
                 poll_ui_state(
                     meshcat,
                     context,
+                    simulator,
                     diagram,
                     initial_context,
                     is_paused=is_paused,
