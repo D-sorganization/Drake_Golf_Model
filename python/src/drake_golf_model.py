@@ -48,6 +48,14 @@ __all__ = [
     "make_cylinder_inertia",
 ]
 
+# Constants
+# [m] Ground box dimensions (Width, Depth, Height)
+GROUND_SIZE = np.array([50.0, 50.0, 1.0])
+# [m] Offset to place top surface at z=0 (since box is centered)
+GROUND_OFFSET = np.array([0.0, 0.0, -0.5])
+# [RGBA] Green color for golf grass
+GROUND_COLOR = np.array([0.2, 0.8, 0.2, 1.0])
+
 # -----------------------------
 # Parameter containers
 # -----------------------------
@@ -622,29 +630,31 @@ def add_ground_and_club_contact(
 ) -> None:
     """Add ground and club contact geometry to the plant."""
     world_body = plant.world_body()
-    # Replace HalfSpace with a large Box for better visualization and contact support
-    # Box is 50x50m and 1m deep, entered at z=-0.5 so top surface is at z=0
-    ground_size = np.array([50.0, 50.0, 1.0])
-    ground_shape = Box(ground_size[0], ground_size[1], ground_size[2])
-    X_WG = RigidTransform(p=np.array([0.0, 0.0, -0.5]))
-
+    
     friction = CoulombFriction(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
+    
+    # 1. Collision: Use HalfSpace for infinite ground to prevent edge issues
+    # This prevents artifacts if objects slide off the visualization box
     plant.RegisterCollisionGeometry(
         world_body,
-        X_WG,
-        ground_shape,
+        RigidTransform(),
+        HalfSpace(),
         "ground_collision",
         friction,  # type: ignore[arg-type]
     )
-    # Add Visual for ground with color (Green for golf)
+    
+    # 2. Visual: Use large Box for green floor visualization
+    # Box is centered at z=-0.5 so top surface is at z=0
+    ground_shape = Box(GROUND_SIZE[0], GROUND_SIZE[1], GROUND_SIZE[2])
+    X_WG_Visual = RigidTransform(p=GROUND_OFFSET)
     plant.RegisterVisualGeometry(
         world_body,
-        X_WG,
+        X_WG_Visual,
         ground_shape,
         "ground_visual",
-        np.array([0.2, 0.8, 0.2, 1.0], dtype=np.float64),  # type: ignore[arg-type]
+        GROUND_COLOR,  # type: ignore[arg-type]
     )
 
     # Clubhead collision sphere

@@ -2,8 +2,11 @@
 
 import contextlib
 import logging
+import time
 
 from pydrake.all import (
+    Meshcat,
+    MeshcatParams,
     Simulator,
     StartMeshcat,
     RigidTransform,
@@ -26,6 +29,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Constants
+# [s] 20Hz update rate for smooth visualization without overloading
+STEP_SIZE_S = 0.05
+# [m] Approx standing height (Winter 2009, Biomechanics and Motor Control of Human Movement)
+PELVIS_HEIGHT_M = 1.0
+
 
 def main() -> None:
     """Run the Golf Analysis GUI."""
@@ -34,7 +43,11 @@ def main() -> None:
 
     # Start Meshcat
     try:
-        meshcat = StartMeshcat()
+        # Security: Bind to localhost to prevent exposure to the network
+        meshcat_params = MeshcatParams()
+        meshcat_params.host = "localhost"
+        meshcat = Meshcat(meshcat_params)
+
         logger.info("Meshcat server started at: %s", meshcat.web_url())
     except Exception:
         logger.exception(
@@ -45,7 +58,6 @@ def main() -> None:
         )
         return
 
-    # Build Diagram with Visualization
     # Build Diagram with Visualization
     params = GolfModelParams()
     diagram, plant, _ = build_golf_swing_diagram(params, meshcat=meshcat)
@@ -58,13 +70,12 @@ def main() -> None:
     context = simulator.get_mutable_context()
     
     # Set initial pose (standing up, feet on ground approx)
-    # Pelvis is approx 1m high for a standing adult
     plant_context = diagram.GetMutableSubsystemContext(plant, context)
     pelvis = plant.GetBodyByName("pelvis")
     plant.SetFreeBodyPose(
         plant_context, 
         pelvis, 
-        RigidTransform([0.0, 0.0, 1.0])
+        RigidTransform([0.0, 0.0, PELVIS_HEIGHT_M])
     )
 
     logger.info("Simulation initialized. Ready to run.")
@@ -77,17 +88,13 @@ def main() -> None:
     logger.info("Simulation running. Use Meshcat controls to interact.")
     logger.info("Press Ctrl+C in terminal to exit.")
 
-    # Save initial state for reset
-    context = simulator.get_mutable_context()
-    initial_state = context.get_continuous_state_vector().CopyToVector()
-    initial_time = context.get_time()
+    # Save initial state for reset (Cloning context captures continuous & discrete state)
+    initial_context = context.Clone()
 
     # State tracking for buttons
     reset_clicks = 0
     pause_clicks = 0
     is_paused = False
-
-    step_size = 0.05  # Visualization update rate
 
     while True:
         # 1. Handle Reset
@@ -95,8 +102,8 @@ def main() -> None:
         curr_reset = meshcat.GetButtonClicks("Reset")
         if curr_reset > reset_clicks:
             reset_clicks = curr_reset
-            context.SetTime(initial_time)
-            context.SetContinuousState(initial_state)
+            # Restore state from cloned context
+            context.SetTimeStateAndParametersFrom(initial_context)
             simulator.Initialize()
             logger.info("Visualizer: Reset triggered.")
 
@@ -113,12 +120,11 @@ def main() -> None:
 
         # 4. Step Simulation
         if not is_paused:
-            target_time = context.get_time() + step_size
+            target_time = context.get_time() + STEP_SIZE_S
             simulator.AdvanceTo(target_time)
         else:
-            # If paused, we still need to yield time to Meshcat/system (though python is single threaded)
-            # Just sleeping a tiny bit prevents CPU spin
-            pass
+            # Prevent CPU spin when paused
+            time.sleep(0.01)
 
 
 if __name__ == "__main__":
