@@ -29,9 +29,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 STEP_SIZE_S: typing.Final[float] = 0.01  # [s] Simulation time step for 100Hz updates
-SLEEP_DURATION_S: typing.Final[float] = (
-    0.05  # [s] Sleep to prevent busy-wait (20Hz check rate)
-)
+SLEEP_DURATION_S: typing.Final[float] = 0.05  # [s] Sleep to prevent busy-wait (20Hz)
 
 
 def _run_simulation_loop(
