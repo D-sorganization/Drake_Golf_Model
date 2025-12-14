@@ -3,7 +3,6 @@
 Tests model building, parameter validation, and model structure.
 """
 
-
 import numpy as np
 import pytest
 
@@ -22,9 +21,9 @@ try:
 except ImportError:
     HAS_DRAKE = False
     # Mock symbols for type checker / name resolution
-    SpatialInertia = object  # type: ignore[misc,assignment]
-    GolfModelParams = None  # type: ignore[assignment]
-    SegmentParams = None  # type: ignore[assignment]
+    SpatialInertia = None  # type: ignore[assignment,misc]
+    GolfModelParams = None  # type: ignore[assignment, misc]
+    SegmentParams = None  # type: ignore[assignment, misc]
     build_golf_swing_diagram = None  # type: ignore[assignment]
     make_cylinder_inertia = None  # type: ignore[assignment]
 
@@ -109,22 +108,14 @@ class TestCylinderInertia:
         """Test cylinder inertia with positive parameters."""
         # This test requires Drake to be available if we were creating raw objects,
         # but 'make_cylinder_inertia' returns a SpatialInertia which we import for verification.
-        if not HAS_DRAKE:
-            pytest.skip("Drake not available")
-
         inertia = make_cylinder_inertia(mass=1.0, radius=0.05, length=1.0)
         assert isinstance(inertia, SpatialInertia)
 
     def test_make_cylinder_inertia_zero_mass(self) -> None:
         """Test cylinder inertia with zero mass raises error."""
         # Drake throws error for zero mass in standard inertia creation
-        try:
-            with pytest.raises((ValueError, RuntimeError)):
-                make_cylinder_inertia(mass=0.0, radius=0.05, length=1.0)
-        except (ImportError, ValueError, RuntimeError):
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        with pytest.raises((ValueError, RuntimeError)):
+            make_cylinder_inertia(mass=0.0, radius=0.05, length=1.0)
 
 
 @requires_drake
@@ -133,74 +124,49 @@ class TestModelBuilding:
 
     def test_build_golf_swing_diagram_default(self) -> None:
         """Test building golf swing diagram with default parameters."""
-        try:
-            diagram, plant, scene_graph, _ = build_golf_swing_diagram()
-            assert diagram is not None
-            assert plant is not None
-            assert scene_graph is not None
-            # Check that plant has been finalized
-            assert plant.num_bodies() > 0
-        except ImportError:
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        diagram, plant, scene_graph, _ = build_golf_swing_diagram()
+        assert diagram is not None
+        assert plant is not None
+        assert scene_graph is not None
+        # Check that plant has been finalized
+        assert plant.num_bodies() > 0
 
     def test_build_golf_swing_diagram_custom_params(self) -> None:
         """Test building golf swing diagram with custom parameters."""
-        try:
-            custom_params = GolfModelParams(
-                pelvis_to_shoulders=0.40,
-                spine_mass=16.0,
-            )
-            diagram, plant, scene_graph, _ = build_golf_swing_diagram(custom_params)
-            assert diagram is not None
-            assert plant is not None
-            assert scene_graph is not None
-        except ImportError:
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        custom_params = GolfModelParams(
+            pelvis_to_shoulders=0.40,
+            spine_mass=16.0,
+        )
+        diagram, plant, scene_graph, _ = build_golf_swing_diagram(custom_params)
+        assert diagram is not None
+        assert plant is not None
+        assert scene_graph is not None
 
     def test_model_has_required_bodies(self) -> None:
         """Test that model has required body components."""
-        try:
-            _, plant, _, model_instance = build_golf_swing_diagram()
-            # Check for key bodies
-            body_names = [
-                plant.GetBodyByName(name, model_instance).name()
-                for name in [
-                    "pelvis",
-                    "spine_base",
-                    "left_upper_arm",
-                    "right_upper_arm",
-                    "club",
-                ]
+        _, plant, _, model_instance = build_golf_swing_diagram()
+        # Check for key bodies
+        body_names = [
+            plant.GetBodyByName(name, model_instance).name()
+            for name in [
+                "pelvis",
+                "spine_base",
+                "left_upper_arm",
+                "right_upper_arm",
+                "club",
             ]
-            assert len(body_names) == 5
-        except (ImportError, RuntimeError):
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        ]
+        assert len(body_names) == 5
 
     def test_model_has_joints(self) -> None:
         """Test that model has joints."""
-        try:
-            _, plant, _, _ = build_golf_swing_diagram()
-            assert plant.num_joints() > 0
-        except ImportError:
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        _, plant, _, _ = build_golf_swing_diagram()
+        assert plant.num_joints() > 0
 
     def test_model_has_actuators(self) -> None:
         """Test that model has actuators."""
-        try:
-            _, plant, _, _ = build_golf_swing_diagram()
-            assert plant.num_actuators() > 0
-        except ImportError:
-            if not HAS_DRAKE:
-                pytest.skip("Drake not available")
-            raise
+        _, plant, _, _ = build_golf_swing_diagram()
+        assert plant.num_actuators() > 0
 
 
 @requires_drake
