@@ -32,6 +32,17 @@ STEP_SIZE_S: typing.Final[float] = 0.01  # [s] Simulation time step for 100Hz up
 SLEEP_DURATION_S: typing.Final[float] = 0.05  # [s] Sleep to prevent busy-wait (20Hz)
 
 
+def _reset_simulation(context: Context, diagram: Diagram, simulator: Simulator) -> None:
+    """Reset simulation state to initial conditions."""
+    logger.info("UX: Resetting simulation...")
+    # 1) Set time to start (0.0) so simulation restarts from the beginning.
+    context.SetTime(0.0)
+    # 2) Restore diagram default state to reset all model variables and parameters.
+    diagram.SetDefaultState(context, context.get_mutable_state())
+    # 3) Reinitialize simulator integrator to ensure numerical state is consistent.
+    simulator.Initialize()
+
+
 def _run_simulation_loop(
     meshcat: Meshcat,
     simulator: Simulator,
@@ -58,18 +69,9 @@ def _run_simulation_loop(
         current_reset_clicks = meshcat.GetButtonClicks("Reset")
         if current_reset_clicks > reset_clicks:
             reset_clicks = current_reset_clicks
-            logger.info("UX: Resetting simulation...")
-
-            # Reset simulation state:
-            # 1) Set time to start (0.0) so simulation restarts from the beginning.
-            context.SetTime(0.0)
-
-            # 2) Restore diagram default state to reset all model variables and parameters.
-            #    SetDefaultContext resets the entire context (state, parameters, etc.) to defaults.
-            diagram.SetDefaultContext(context)
-
-            # 3) Reinitialize simulator integrator to ensure numerical state is consistent.
-            simulator.Initialize()
+            _reset_simulation(context, diagram, simulator)
+            # 4) Unpause if paused
+            is_paused = False
 
         # UX: Check Pause
         current_pause_clicks = meshcat.GetButtonClicks("Pause")
@@ -101,6 +103,7 @@ def main() -> None:
         # Security: Bind to localhost to prevent exposure to the network
         meshcat_params = MeshcatParams()
         meshcat_params.host = "localhost"
+        meshcat_params.port = 0  # Use an ephemeral port to avoid collisions
         meshcat = Meshcat(meshcat_params)
 
         logger.info("Meshcat server started at: %s", meshcat.web_url())
