@@ -36,8 +36,7 @@ logger = logging.getLogger(__name__)
 STEP_SIZE_S = 0.05
 
 # [m] Design value for standing height
-# Source: Design parameter representing approximately 50th percentile
-#         male pelvis height (Reference: Winter, 2009).
+# Source: Winter (2009) data for 50th percentile male; set to 1.0m for simulation design.
 PELVIS_HEIGHT_M = 1.0
 
 # [s] Sleep duration when paused to prevent CPU spin
@@ -143,7 +142,7 @@ def main() -> None:  # noqa: PLR0915
     # Initialize
     context = simulator.get_mutable_context()
 
-    # Set initial pose (standing up, feet on ground approximately)
+    # Set initial pose (standing up, feet on ground)
     plant_context = diagram.GetMutableSubsystemContext(plant, context)
     pelvis = plant.GetBodyByName("pelvis", model_instance)
     plant.SetFreeBodyPose(
