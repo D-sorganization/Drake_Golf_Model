@@ -1,6 +1,7 @@
 """Golf Analysis Suite GUI Entry Point."""
 
 import logging
+import os
 import time
 
 from pydrake.all import (
@@ -91,8 +92,9 @@ def main() -> None:  # noqa: PLR0915
     # Start Meshcat
     try:
         # Security: Bind to localhost to prevent exposure to the network
+        # When running in Docker, we typically need 0.0.0.0
         meshcat_params = MeshcatParams()
-        meshcat_params.host = "localhost"
+        meshcat_params.host = os.environ.get("MESHCAT_HOST", "localhost")
         meshcat = Meshcat(meshcat_params)
 
         logger.info("Meshcat server started at: %s", meshcat.web_url())
