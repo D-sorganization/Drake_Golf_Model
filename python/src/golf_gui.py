@@ -1,16 +1,13 @@
 """Golf Analysis Suite GUI Entry Point."""
 
-import contextlib
 import logging
 import time
 
 from pydrake.all import (
     Meshcat,
     MeshcatParams,
-    Simulator,
-    StartMeshcat,
     RigidTransform,
-    RotationMatrix,
+    Simulator,
 )
 
 try:
@@ -31,12 +28,20 @@ logger = logging.getLogger(__name__)
 
 # Constants
 # [s] 20Hz update rate for smooth visualization without overloading
+# Value derived from 1.0 / 20.0 Hz
 STEP_SIZE_S = 0.05
-# [m] Approx standing height (Winter 2009, Biomechanics and Motor Control of Human Movement)
+
+# [m] Approx standing height
+# Source: Winter, D. A. (2009). Biomechanics and motor control of human movement.
+#         Approx 50th percentile male pelvis height.
 PELVIS_HEIGHT_M = 1.0
 
+# [s] Sleep duration when paused to prevent CPU spin
+# Source: 10ms sleep -> ~100Hz polling rate
+PAUSE_SLEEP_S = 0.01
 
-def main() -> None:
+
+def main() -> None:  # noqa: PLR0915
     """Run the Golf Analysis GUI."""
     setup_logging()
     logger.info("Starting Golf Analysis Suite...")
@@ -68,14 +73,12 @@ def main() -> None:
 
     # Initialize
     context = simulator.get_mutable_context()
-    
+
     # Set initial pose (standing up, feet on ground approx)
     plant_context = diagram.GetMutableSubsystemContext(plant, context)
     pelvis = plant.GetBodyByName("pelvis")
     plant.SetFreeBodyPose(
-        plant_context, 
-        pelvis, 
-        RigidTransform([0.0, 0.0, PELVIS_HEIGHT_M])
+        plant_context, pelvis, RigidTransform([0.0, 0.0, PELVIS_HEIGHT_M])
     )
 
     logger.info("Simulation initialized. Ready to run.")
@@ -113,6 +116,8 @@ def main() -> None:
             # Restore state from cloned context
             context.SetTimeStateAndParametersFrom(initial_context)
             simulator.Initialize()
+            # Force publish so view updates even if paused
+            diagram.Publish(context)
             logger.info("Visualizer: Reset triggered.")
 
         # 2. Handle Pause
@@ -132,7 +137,7 @@ def main() -> None:
             simulator.AdvanceTo(target_time)
         else:
             # Prevent CPU spin when paused
-            time.sleep(0.01)
+            time.sleep(PAUSE_SLEEP_S)
 
 
 if __name__ == "__main__":

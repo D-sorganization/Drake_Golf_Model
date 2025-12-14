@@ -50,11 +50,19 @@ __all__ = [
 
 # Constants
 # [m] Ground box dimensions (Width, Depth, Height)
+# Source: Chosen to be large enough to contain typical golf swing motion (>10m radius)
 GROUND_SIZE = np.array([50.0, 50.0, 1.0])
+
+# [m] Half the ground box height; used for offsetting ground so top is at z=0
+# Source: Derived from GROUND_SIZE
+HALF_GROUND_HEIGHT = GROUND_SIZE[2] / 2.0
+
 # [m] Offset to place top surface at z=0 (since box is centered)
 #     Shift downward by half the height
-GROUND_OFFSET = np.array([0.0, 0.0, -GROUND_SIZE[2] / 2.0])
+GROUND_OFFSET = np.array([0.0, 0.0, -HALF_GROUND_HEIGHT])
+
 # [RGBA] Green color for golf grass
+# Source: Standard aesthetics for golf simulation
 GROUND_COLOR = np.array([0.2, 0.8, 0.2, 1.0])
 
 # -----------------------------
@@ -631,11 +639,11 @@ def add_ground_and_club_contact(
 ) -> None:
     """Add ground and club contact geometry to the plant."""
     world_body = plant.world_body()
-    
+
     friction = CoulombFriction(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
-    
+
     # 1. Collision: Use HalfSpace for infinite ground to prevent edge issues
     # This prevents artifacts if objects slide off the visualization box
     plant.RegisterCollisionGeometry(
@@ -645,7 +653,7 @@ def add_ground_and_club_contact(
         "ground_collision",
         friction,  # type: ignore[arg-type]
     )
-    
+
     # 2. Visual: Use large Box for green floor visualization
     # Box is centered at z=-0.5 so top surface is at z=0
     ground_shape = Box(GROUND_SIZE[0], GROUND_SIZE[1], GROUND_SIZE[2])
