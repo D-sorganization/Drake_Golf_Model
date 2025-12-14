@@ -51,7 +51,8 @@ __all__ = [
 
 # Constants
 # [m] Ground box dimensions (Width, Depth, Height)
-# Source: Chosen to be large enough to contain typical golf swing motion (>10m radius)
+# Source: Design choice. 50x50m allows >20m clearance for swing/ball flight
+#         relative to origin. 1m depth ensures contact robustness.
 GROUND_SIZE = np.array([50.0, 50.0, 1.0])
 
 # [m] Half the ground box height; used for offsetting ground so top is at z=0
@@ -62,7 +63,7 @@ HALF_GROUND_HEIGHT = GROUND_SIZE[2] / 2.0
 #     Shift downward by half the height
 GROUND_OFFSET = np.array([0.0, 0.0, -HALF_GROUND_HEIGHT])
 
-# [RGBA] Green color for golf grass
+# [RGBA] Green color for golf grass (Normalized 0.0-1.0)
 # Source: Standard aesthetics for golf simulation
 GROUND_COLOR = np.array([0.2, 0.8, 0.2, 1.0])
 

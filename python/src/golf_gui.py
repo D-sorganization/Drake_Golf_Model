@@ -3,6 +3,7 @@
 import logging
 import os
 import time
+from pathlib import Path
 
 from pydrake.all import (
     Context,
@@ -34,9 +35,9 @@ logger = logging.getLogger(__name__)
 # Value derived from 1.0 / 20.0 Hz
 STEP_SIZE_S = 0.05
 
-# [m] Approximately standing height
-# Source: Design value. Chosen to represent an approximately 50th percentile
-#         male pelvis height (Winter, 2009 for reference).
+# [m] Design value for standing height
+# Source: Design parameter representing approximately 50th percentile
+#         male pelvis height (Reference: Winter, 2009).
 PELVIS_HEIGHT_M = 1.0
 
 # [s] Sleep duration when paused to prevent CPU spin
@@ -47,7 +48,6 @@ PAUSE_SLEEP_S = 0.01
 def poll_ui_state(  # noqa: PLR0913
     meshcat: Meshcat,
     context: Context,
-    simulator: Simulator,
     diagram: Diagram,
     initial_context: Context,
     *,
@@ -69,7 +69,6 @@ def poll_ui_state(  # noqa: PLR0913
         reset_clicks = curr_reset
         # Restore state from cloned context
         context.SetTimeStateAndParametersFrom(initial_context)
-        simulator.Initialize()
         # Force publish so view updates even if paused
         diagram.Publish(context)
         logger.info("Visualizer: Reset triggered.")
@@ -84,6 +83,19 @@ def poll_ui_state(  # noqa: PLR0913
     return False, is_paused, pause_clicks, stop_clicks, reset_clicks
 
 
+def _is_running_in_docker() -> bool:
+    """Detect if running inside a Docker container."""
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        content = Path("/proc/1/cgroup").read_text(encoding="utf-8")
+        if "docker" in content or "containerd" in content:
+            return True
+    except OSError:
+        pass
+    return False
+
+
 def main() -> None:  # noqa: PLR0915
     """Run the Golf Analysis GUI."""
     setup_logging()
@@ -91,10 +103,21 @@ def main() -> None:  # noqa: PLR0915
 
     # Start Meshcat
     try:
-        # Security: Bind to localhost to prevent exposure to the network
-        # When running in Docker, we typically need 0.0.0.0
+        # Security: Validate host bind
         meshcat_params = MeshcatParams()
-        meshcat_params.host = os.environ.get("MESHCAT_HOST", "localhost")
+        env_host = os.environ.get("MESHCAT_HOST", "localhost")
+        safe_hosts = {"localhost", "127.0.0.1"}
+
+        if env_host not in safe_hosts and not _is_running_in_docker():
+            logger.warning(
+                "Unsafe MESHCAT_HOST value '%s' ignored outside Docker. "
+                "Defaulting to 'localhost'.",
+                env_host,
+            )
+            meshcat_params.host = "localhost"
+        else:
+            meshcat_params.host = env_host
+
         meshcat = Meshcat(meshcat_params)
 
         logger.info("Meshcat server started at: %s", meshcat.web_url())
@@ -155,7 +178,6 @@ def main() -> None:  # noqa: PLR0915
                 poll_ui_state(
                     meshcat,
                     context,
-                    simulator,
                     diagram,
                     initial_context,
                     is_paused=is_paused,
@@ -180,8 +202,13 @@ def main() -> None:  # noqa: PLR0915
                 # Prevent CPU spin when paused
                 time.sleep(PAUSE_SLEEP_S)
 
+        except (RuntimeError, ValueError):
+            logger.exception("A simulation error occurred")
+            break
         except Exception:
-            logger.exception("An error occurred during the simulation loop.")
+            # Catch-all for other non-exit exceptions (like KeyboardInterrupt if not handled)
+            # but allow clean exit if needed.
+            logger.exception("An unexpected error occurred.")
             break
 
 
