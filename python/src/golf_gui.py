@@ -101,12 +101,8 @@ def _is_running_in_docker() -> bool:
     return False
 
 
-def main() -> None:  # noqa: PLR0915
-    """Run the Golf Analysis GUI."""
-    setup_logging()
-    logger.info("Starting Golf Analysis Suite...")
-
-    # Start Meshcat
+def _start_meshcat() -> Meshcat | None:
+    """Start the Meshcat visualizer."""
     try:
         # Security: Validate host bind
         meshcat_params = MeshcatParams()
@@ -123,11 +119,16 @@ def main() -> None:  # noqa: PLR0915
         else:
             meshcat_params.host = env_host
 
-        # Use an ephemeral port to avoid collisions
-        meshcat_params.port = 0
+        # Port configuration
+        if _is_running_in_docker():
+            # Inside Docker, use fixed port 7000 to match launcher mapping
+            meshcat_params.port = 7000
+        else:
+            # On host, use an ephemeral port to avoid collisions
+            meshcat_params.port = 0
+
         meshcat = Meshcat(meshcat_params)
 
-        logger.info("Meshcat server started at: %s", meshcat.web_url())
     except Exception:
         logger.exception(
             "Failed to start Meshcat. Common causes include:\n"
@@ -135,6 +136,20 @@ def main() -> None:  # noqa: PLR0915
             "- Missing or incompatible Meshcat/Drake dependencies\n"
             "- Firewall or network restrictions",
         )
+        return None
+    else:
+        logger.info("Meshcat server started at: %s", meshcat.web_url())
+        return meshcat
+
+
+def main() -> None:  # noqa: PLR0915
+    """Run the Golf Analysis GUI."""
+    setup_logging()
+    logger.info("Starting Golf Analysis Suite...")
+
+    # Start Meshcat
+    meshcat = _start_meshcat()
+    if meshcat is None:
         return
 
     # Build Diagram with Visualization
