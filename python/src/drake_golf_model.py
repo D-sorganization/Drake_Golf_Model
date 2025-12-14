@@ -19,7 +19,6 @@ from pydrake.all import (
     JointIndex,
     Meshcat,
     MeshcatVisualizer,
-    ModelInstanceIndex,
     MultibodyPlant,
     Parser,
     RigidBody,
@@ -48,24 +47,6 @@ __all__ = [
     "build_golf_swing_diagram",
     "make_cylinder_inertia",
 ]
-
-# Constants
-# [m] Ground box dimensions (Width, Depth, Height)
-# Source: Design choice. 50x50m allows >20m clearance for swing/ball flight
-#         relative to origin. 1m depth ensures contact robustness.
-GROUND_SIZE = np.array([50.0, 50.0, 1.0])
-
-# [m] Half the ground box height; used for offsetting ground so top is at z=0
-# Source: Derived from GROUND_SIZE
-HALF_GROUND_HEIGHT = GROUND_SIZE[2] / 2.0
-
-# [m] Offset to place top surface at z=0 (since box is centered)
-#     Shift downward by half the height
-GROUND_OFFSET = np.array([0.0, 0.0, -HALF_GROUND_HEIGHT])
-
-# [RGBA] Green color for golf grass (Normalized 0.0-1.0)
-# Source: Standard aesthetics for golf simulation
-GROUND_COLOR = np.array([0.2, 0.8, 0.2, 1.0])
 
 # -----------------------------
 # Parameter containers
@@ -641,31 +622,28 @@ def add_ground_and_club_contact(
 ) -> None:
     """Add ground and club contact geometry to the plant."""
     world_body = plant.world_body()
+    X_WG = RigidTransform()
 
     friction = CoulombFriction(
         params.ground_friction_mu_static, params.ground_friction_mu_dynamic
     )
-
-    # 1. Collision: Use HalfSpace for infinite ground to prevent edge issues
-    # This prevents artifacts if objects slide off the visualization box
     plant.RegisterCollisionGeometry(
         world_body,
-        RigidTransform(),
+        X_WG,
         HalfSpace(),
         "ground_collision",
         friction,  # type: ignore[arg-type]
     )
-
-    # 2. Visual: Use large Box for green floor visualization
-    # Box is centered at z=-0.5 so top surface is at z=0
-    ground_shape = Box(GROUND_SIZE[0], GROUND_SIZE[1], GROUND_SIZE[2])
-    X_WG_Visual = RigidTransform(p=GROUND_OFFSET)
+    # Add Visual for ground with color
+    # Use a large Box instead of HalfSpace for better compatibility with Meshcat
+    ground_box = Box(100.0, 100.0, 1.0)
+    X_WG_visual = RigidTransform(p=np.array([0, 0, -0.5]))
     plant.RegisterVisualGeometry(
         world_body,
-        X_WG_Visual,
-        ground_shape,
+        X_WG_visual,
+        ground_box,
         "ground_visual",
-        GROUND_COLOR,  # type: ignore[arg-type]
+        np.array([0.3, 0.3, 0.3, 1.0], dtype=np.float64),  # type: ignore[arg-type]
     )
 
     # Clubhead collision sphere
@@ -701,7 +679,7 @@ def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
     urdf_path: str | None = None,
     meshcat: Meshcat | None = None,
-) -> tuple[Diagram, MultibodyPlant, SceneGraph, ModelInstanceIndex]:
+) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
     """Build the full Drake diagram for the golf swing."""
     # Generate URDF
     generator = GolfURDFGenerator(params)
@@ -750,4 +728,4 @@ def build_golf_swing_diagram(
     if meshcat:
         MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
     diagram = builder.Build()
-    return diagram, plant, scene_graph, model_instance
+    return diagram, plant, scene_graph
