@@ -4,6 +4,8 @@ import logging
 import time
 
 from pydrake.all import (
+    Context,
+    Diagram,
     Meshcat,
     MeshcatParams,
     RigidTransform,
@@ -31,14 +33,53 @@ logger = logging.getLogger(__name__)
 # Value derived from 1.0 / 20.0 Hz
 STEP_SIZE_S = 0.05
 
-# [m] Approx standing height
+# [m] Approximately standing height
 # Source: Winter, D. A. (2009). Biomechanics and motor control of human movement.
-#         Approx 50th percentile male pelvis height.
+#         Approximately 50th percentile male pelvis height.
 PELVIS_HEIGHT_M = 1.0
 
 # [s] Sleep duration when paused to prevent CPU spin
 # Source: 10ms sleep -> ~100Hz polling rate
 PAUSE_SLEEP_S = 0.01
+
+
+def handle_ui_events(  # noqa: PLR0913
+    meshcat: Meshcat,
+    context: Context,
+    simulator: Simulator,
+    diagram: Diagram,
+    initial_context: Context,
+    is_paused: bool,  # noqa: FBT001
+    pause_clicks: int,
+    stop_clicks: int,
+    reset_clicks: int,
+) -> tuple[bool, bool, int, int, int]:
+    """Handle UI events from Meshcat buttons."""
+    # Check Stop condition
+    curr_stop = meshcat.GetButtonClicks("Stop")
+    if curr_stop > stop_clicks:
+        logger.info("Visualizer: Stop triggered. Exiting...")
+        return True, is_paused, pause_clicks, stop_clicks, reset_clicks
+
+    # 1. Handle Reset
+    curr_reset = meshcat.GetButtonClicks("Reset")
+    if curr_reset > reset_clicks:
+        reset_clicks = curr_reset
+        # Restore state from cloned context
+        context.SetTimeStateAndParametersFrom(initial_context)
+        simulator.Initialize()
+        # Force publish so view updates even if paused
+        diagram.Publish(context)
+        logger.info("Visualizer: Reset triggered.")
+
+    # 2. Handle Pause
+    curr_pause = meshcat.GetButtonClicks("Pause")
+    if curr_pause > pause_clicks:
+        is_paused = not is_paused
+        pause_clicks = curr_pause
+        logger.info("Visualizer: Paused = %s", is_paused)
+
+    return False, is_paused, pause_clicks, stop_clicks, reset_clicks
 
 
 def main() -> None:  # noqa: PLR0915
@@ -65,7 +106,9 @@ def main() -> None:  # noqa: PLR0915
 
     # Build Diagram with Visualization
     params = GolfModelParams()
-    diagram, plant, _ = build_golf_swing_diagram(params, meshcat=meshcat)
+    diagram, plant, _, model_instance = build_golf_swing_diagram(
+        params, meshcat=meshcat
+    )
 
     # create a simulator
     simulator = Simulator(diagram)
@@ -74,13 +117,15 @@ def main() -> None:  # noqa: PLR0915
     # Initialize
     context = simulator.get_mutable_context()
 
-    # Set initial pose (standing up, feet on ground approx)
+    # Set initial pose (standing up, feet on ground approximately)
     plant_context = diagram.GetMutableSubsystemContext(plant, context)
-    pelvis = plant.GetBodyByName("pelvis")
+    pelvis = plant.GetBodyByName("pelvis", model_instance)
     plant.SetFreeBodyPose(
         plant_context, pelvis, RigidTransform([0.0, 0.0, PELVIS_HEIGHT_M])
     )
 
+    # Initialize BEFORE cloning to capture post-init state
+    simulator.Initialize()
     logger.info("Simulation initialized. Ready to run.")
 
     # Add UX controls
@@ -102,34 +147,22 @@ def main() -> None:  # noqa: PLR0915
     is_paused = False
 
     while True:
-        # Check Stop condition
-        curr_stop = meshcat.GetButtonClicks("Stop")
-        if curr_stop > stop_clicks:
-            logger.info("Visualizer: Stop triggered. Exiting...")
+        stop_triggered, is_paused, pause_clicks, stop_clicks, reset_clicks = (
+            handle_ui_events(
+                meshcat,
+                context,
+                simulator,
+                diagram,
+                initial_context,
+                is_paused,
+                pause_clicks,
+                stop_clicks,
+                reset_clicks,
+            )
+        )
+
+        if stop_triggered:
             break
-
-        # 1. Handle Reset
-        # GetButtonClicks returns total clicks since creation
-        curr_reset = meshcat.GetButtonClicks("Reset")
-        if curr_reset > reset_clicks:
-            reset_clicks = curr_reset
-            # Restore state from cloned context
-            context.SetTimeStateAndParametersFrom(initial_context)
-            simulator.Initialize()
-            # Force publish so view updates even if paused
-            diagram.Publish(context)
-            logger.info("Visualizer: Reset triggered.")
-
-        # 2. Handle Pause
-        curr_pause = meshcat.GetButtonClicks("Pause")
-        if curr_pause > pause_clicks:
-            clicks_diff = curr_pause - pause_clicks
-            pause_clicks = curr_pause
-            # Only toggle if an odd number of clicks occurred
-            # (e.g., 1 click = toggle, 2 clicks = no net change)
-            if clicks_diff % 2 == 1:
-                is_paused = not is_paused
-                logger.info("Visualizer: Paused = %s", is_paused)
 
         # 3. Update Rate
         rate = meshcat.GetSliderValue("Realtime Rate")

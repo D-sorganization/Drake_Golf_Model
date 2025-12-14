@@ -19,6 +19,7 @@ from pydrake.all import (
     JointIndex,
     Meshcat,
     MeshcatVisualizer,
+    ModelInstanceIndex,
     MultibodyPlant,
     Parser,
     RigidBody,
@@ -699,7 +700,7 @@ def build_golf_swing_diagram(
     params: GolfModelParams = GolfModelParams(),
     urdf_path: str | None = None,
     meshcat: Meshcat | None = None,
-) -> tuple[Diagram, MultibodyPlant, SceneGraph]:
+) -> tuple[Diagram, MultibodyPlant, SceneGraph, ModelInstanceIndex]:
     """Build the full Drake diagram for the golf swing."""
     # Generate URDF
     generator = GolfURDFGenerator(params)
@@ -748,4 +749,4 @@ def build_golf_swing_diagram(
     if meshcat:
         MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
     diagram = builder.Build()
-    return diagram, plant, scene_graph
+    return diagram, plant, scene_graph, model_instance
