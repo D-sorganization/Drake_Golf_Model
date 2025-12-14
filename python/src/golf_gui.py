@@ -84,9 +84,10 @@ def main() -> None:
     meshcat.AddSlider("Realtime Rate", 0.1, 2.0, 0.1, 1.0)
     meshcat.AddButton("Reset")
     meshcat.AddButton("Pause")
+    meshcat.AddButton("Stop")
 
     logger.info("Simulation running. Use Meshcat controls to interact.")
-    logger.info("Press Ctrl+C in terminal to exit.")
+    logger.info("Click 'Stop' in Meshcat or press Ctrl+C in terminal to exit.")
 
     # Save initial state for reset (Cloning context captures continuous & discrete state)
     initial_context = context.Clone()
@@ -94,9 +95,16 @@ def main() -> None:
     # State tracking for buttons
     reset_clicks = 0
     pause_clicks = 0
+    stop_clicks = 0
     is_paused = False
 
     while True:
+        # Check Stop condition
+        curr_stop = meshcat.GetButtonClicks("Stop")
+        if curr_stop > stop_clicks:
+            logger.info("Visualizer: Stop triggered. Exiting...")
+            break
+
         # 1. Handle Reset
         # GetButtonClicks returns total clicks since creation
         curr_reset = meshcat.GetButtonClicks("Reset")

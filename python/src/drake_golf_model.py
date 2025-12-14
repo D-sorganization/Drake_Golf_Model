@@ -52,7 +52,8 @@ __all__ = [
 # [m] Ground box dimensions (Width, Depth, Height)
 GROUND_SIZE = np.array([50.0, 50.0, 1.0])
 # [m] Offset to place top surface at z=0 (since box is centered)
-GROUND_OFFSET = np.array([0.0, 0.0, -0.5])
+#     Shift downward by half the height
+GROUND_OFFSET = np.array([0.0, 0.0, -GROUND_SIZE[2] / 2.0])
 # [RGBA] Green color for golf grass
 GROUND_COLOR = np.array([0.2, 0.8, 0.2, 1.0])
 
