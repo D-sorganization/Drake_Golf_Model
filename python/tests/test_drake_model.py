@@ -3,13 +3,11 @@
 Tests model building, parameter validation, and model structure.
 """
 
-import sys
 
 import numpy as np
 import pytest
 
-# Try to import drake_golf_model, skip all tests if pydrake is not available
-# Note: pythonpath is configured in pytest.ini to include the parent directory
+# Handle optional pydrake dependency
 try:
     from pydrake.multibody.tree import SpatialInertia
 
@@ -19,18 +17,23 @@ try:
         build_golf_swing_diagram,
         make_cylinder_inertia,
     )
-except ImportError as e:
-    # Skip all tests if pydrake is not available
-    # We define dummy SpatialInertia to allow test collection implicitly,
-    # but the whole file will likely need pytest skipping mechanism if we want
-    # to run tests selectively.
-    # However, existing pattern is to skip if import fails.
-    SpatialInertia = None
-    import pytest
 
-    pytest.skip(f"pydrake not available: {e}", allow_module_level=True)
+    HAS_DRAKE = True
+except ImportError:
+    HAS_DRAKE = False
+    # Mock symbols for type checker / name resolution
+    SpatialInertia = object  # type: ignore[misc,assignment]
+    GolfModelParams = None  # type: ignore[assignment]
+    SegmentParams = None  # type: ignore[assignment]
+    build_golf_swing_diagram = None  # type: ignore[assignment]
+    make_cylinder_inertia = None  # type: ignore[assignment]
 
 
+# Skip decorator for tests requiring Drake
+requires_drake = pytest.mark.skipif(not HAS_DRAKE, reason="pydrake not available")
+
+
+@requires_drake
 class TestSegmentParams:
     """Tests for SegmentParams dataclass."""
 
@@ -62,6 +65,7 @@ class TestSegmentParams:
         assert params.mass == -2.0
 
 
+@requires_drake
 class TestGolfModelParams:
     """Tests for GolfModelParams dataclass."""
 
@@ -97,6 +101,7 @@ class TestGolfModelParams:
         assert params.ground_friction_mu_dynamic <= params.ground_friction_mu_static
 
 
+@requires_drake
 class TestCylinderInertia:
     """Tests for cylinder inertia computation."""
 
@@ -104,7 +109,7 @@ class TestCylinderInertia:
         """Test cylinder inertia with positive parameters."""
         # This test requires Drake to be available if we were creating raw objects,
         # but 'make_cylinder_inertia' returns a SpatialInertia which we import for verification.
-        if "pydrake" not in sys.modules:
+        if not HAS_DRAKE:
             pytest.skip("Drake not available")
 
         inertia = make_cylinder_inertia(mass=1.0, radius=0.05, length=1.0)
@@ -116,10 +121,13 @@ class TestCylinderInertia:
         try:
             with pytest.raises((ValueError, RuntimeError)):
                 make_cylinder_inertia(mass=0.0, radius=0.05, length=1.0)
-        except ImportError:
-            pytest.skip("Drake not available")
+        except (ImportError, ValueError, RuntimeError):
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
 
+@requires_drake
 class TestModelBuilding:
     """Tests for model building functions."""
 
@@ -133,7 +141,9 @@ class TestModelBuilding:
             # Check that plant has been finalized
             assert plant.num_bodies() > 0
         except ImportError:
-            pytest.skip("Drake not available")
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
     def test_build_golf_swing_diagram_custom_params(self) -> None:
         """Test building golf swing diagram with custom parameters."""
@@ -147,7 +157,9 @@ class TestModelBuilding:
             assert plant is not None
             assert scene_graph is not None
         except ImportError:
-            pytest.skip("Drake not available")
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
     def test_model_has_required_bodies(self) -> None:
         """Test that model has required body components."""
@@ -166,7 +178,9 @@ class TestModelBuilding:
             ]
             assert len(body_names) == 5
         except (ImportError, RuntimeError):
-            pytest.skip("Drake not available or model structure changed")
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
     def test_model_has_joints(self) -> None:
         """Test that model has joints."""
@@ -174,7 +188,9 @@ class TestModelBuilding:
             _, plant, _, _ = build_golf_swing_diagram()
             assert plant.num_joints() > 0
         except ImportError:
-            pytest.skip("Drake not available")
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
     def test_model_has_actuators(self) -> None:
         """Test that model has actuators."""
@@ -182,9 +198,12 @@ class TestModelBuilding:
             _, plant, _, _ = build_golf_swing_diagram()
             assert plant.num_actuators() > 0
         except ImportError:
-            pytest.skip("Drake not available")
+            if not HAS_DRAKE:
+                pytest.skip("Drake not available")
+            raise
 
 
+@requires_drake
 class TestParameterValidation:
     """Tests for parameter validation."""
 
