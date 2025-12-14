@@ -1,14 +1,17 @@
 """Golf Analysis Suite GUI Entry Point."""
 
 import logging
+import os
 import time
 import typing
+from pathlib import Path
 
 from pydrake.all import (
     Context,
     Diagram,
     Meshcat,
     MeshcatParams,
+    RigidTransform,
     Simulator,
 )
 
@@ -28,82 +31,100 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-STEP_SIZE_S: typing.Final[float] = 0.01  # [s] Simulation time step for 100Hz updates
-SLEEP_DURATION_S: typing.Final[float] = 0.05  # [s] Sleep to prevent busy-wait (20Hz)
+# [s] Simulation time step for 100Hz updates (smoother visualization)
+STEP_SIZE_S: typing.Final[float] = 0.01
+
+# [s] Sleep to prevent busy-wait (20Hz)
+SLEEP_DURATION_S: typing.Final[float] = 0.05
+
+# [m] Design value for standing height
+# Source: Winter (2009) data for 50th percentile male; set to 1.0m for simulation design.
+PELVIS_HEIGHT_M: typing.Final[float] = 1.0
 
 
-def _reset_simulation(context: Context, diagram: Diagram, simulator: Simulator) -> None:
-    """Reset simulation state to initial conditions."""
-    logger.info("UX: Resetting simulation...")
-    # 1) Set time to start (0.0) so simulation restarts from the beginning.
-    context.SetTime(0.0)
-    # 2) Restore diagram default state to reset all model variables and parameters.
-    diagram.SetDefaultState(context, context.get_mutable_state())
-    # 3) Reinitialize simulator integrator to ensure numerical state is consistent.
-    simulator.Initialize()
-
-
-def _run_simulation_loop(
+def poll_ui_state(  # noqa: PLR0913
     meshcat: Meshcat,
+    context: Context,
     simulator: Simulator,
     diagram: Diagram,
-    context: Context,
-    duration: float,
-) -> None:
-    """Run the main simulation loop with UX controls."""
-    reset_clicks = 0
-    pause_clicks = 0
-    stop_clicks = 0
-    is_paused = False
+    initial_context: Context,
+    *,
+    is_paused: bool,
+    pause_clicks: int,
+    stop_clicks: int,
+    reset_clicks: int,
+) -> tuple[bool, bool, int, int, int]:
+    """Handle UI events from Meshcat buttons."""
+    # Check Stop condition
+    curr_stop = meshcat.GetButtonClicks("Stop")
+    if curr_stop > stop_clicks:
+        logger.info("Visualizer: Stop triggered. Exiting...")
+        return True, is_paused, pause_clicks, curr_stop, reset_clicks
 
-    logger.info("Running simulation loop. Use GUI controls to Reset/Pause/Stop.")
+    # 1. Handle Reset
+    curr_reset = meshcat.GetButtonClicks("Reset")
+    if curr_reset > reset_clicks:
+        reset_clicks = curr_reset
+        # Restore state from cloned context
+        # Reset simulation state:
+        #   1) Set time to start (0.0) so simulation restarts from the beginning.
+        #   2) Restore diagram default state to reset all model variables and parameters.
+        #   3) Reinitialize simulator integrator to ensure numerical state is consistent.
+        context.SetTimeStateAndParametersFrom(initial_context)
+        simulator.Initialize()
+        # Force publish so view updates even if paused
+        diagram.Publish(context)
+        # BUG FIX: Ensure we unpause on reset so playback starts immediately
+        is_paused = False
+        logger.info("Visualizer: Reset triggered.")
 
-    while True:
-        # UX: Check Stop
-        current_stop_clicks = meshcat.GetButtonClicks("Stop")
-        if current_stop_clicks > stop_clicks:
-            logger.info("UX: Stop button clicked. Exiting simulation.")
-            break
+    # 2. Handle Pause
+    curr_pause = meshcat.GetButtonClicks("Pause")
+    if curr_pause > pause_clicks:
+        is_paused = not is_paused
+        pause_clicks = curr_pause
+        logger.info("Visualizer: Paused = %s", is_paused)
 
-        # UX: Check Reset
-        current_reset_clicks = meshcat.GetButtonClicks("Reset")
-        if current_reset_clicks > reset_clicks:
-            reset_clicks = current_reset_clicks
-            _reset_simulation(context, diagram, simulator)
-            # 4) Unpause if paused
-            is_paused = False
-
-        # UX: Check Pause
-        current_pause_clicks = meshcat.GetButtonClicks("Pause")
-        if current_pause_clicks > pause_clicks:
-            pause_clicks = current_pause_clicks
-            is_paused = not is_paused
-            logger.info("UX: Simulation %s", "Paused" if is_paused else "Resumed")
-
-        # UX: Update Realtime Rate from Meshcat slider
-        rate = meshcat.GetSliderValue("Realtime Rate")
-        simulator.set_target_realtime_rate(rate)
-
-        # Advance simulation if not paused and within duration
-        if not is_paused and context.get_time() < duration:
-            next_time = min(context.get_time() + STEP_SIZE_S, duration)
-            simulator.AdvanceTo(next_time)
-        else:
-            # Sleep briefly to avoid busy loop when paused or finished
-            time.sleep(SLEEP_DURATION_S)
+    return False, is_paused, pause_clicks, stop_clicks, reset_clicks
 
 
-def main() -> None:
+def _is_running_in_docker() -> bool:
+    """Detect if running inside a Docker container."""
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        content = Path("/proc/1/cgroup").read_text(encoding="utf-8")
+        if "docker" in content or "containerd" in content:
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def main() -> None:  # noqa: PLR0915
     """Run the Golf Analysis GUI."""
     setup_logging()
     logger.info("Starting Golf Analysis Suite...")
 
     # Start Meshcat
     try:
-        # Security: Bind to localhost to prevent exposure to the network
+        # Security: Validate host bind
         meshcat_params = MeshcatParams()
-        meshcat_params.host = "localhost"
-        meshcat_params.port = 0  # Use an ephemeral port to avoid collisions
+        env_host = os.environ.get("MESHCAT_HOST", "localhost")
+        safe_hosts = {"localhost", "127.0.0.1"}
+
+        if env_host not in safe_hosts and not _is_running_in_docker():
+            logger.warning(
+                "Unsafe MESHCAT_HOST value '%s' ignored outside Docker. "
+                "Defaulting to 'localhost'.",
+                env_host,
+            )
+            meshcat_params.host = "localhost"
+        else:
+            meshcat_params.host = env_host
+
+        # Use an ephemeral port to avoid collisions
+        meshcat_params.port = 0
         meshcat = Meshcat(meshcat_params)
 
         logger.info("Meshcat server started at: %s", meshcat.web_url())
@@ -118,7 +139,9 @@ def main() -> None:
 
     # Build Diagram with Visualization
     params = GolfModelParams()
-    diagram, _, _ = build_golf_swing_diagram(params, meshcat=meshcat)
+    diagram, plant, _, model_instance = build_golf_swing_diagram(
+        params, meshcat=meshcat
+    )
 
     # create a simulator
     simulator = Simulator(diagram)
@@ -127,6 +150,15 @@ def main() -> None:
     # Initialize
     context = simulator.get_mutable_context()
 
+    # Set initial pose (standing up, feet on ground)
+    plant_context = diagram.GetMutableSubsystemContext(plant, context)
+    pelvis = plant.GetBodyByName("pelvis", model_instance)
+    plant.SetFreeBodyPose(
+        plant_context, pelvis, RigidTransform([0.0, 0.0, PELVIS_HEIGHT_M])
+    )
+
+    # Initialize BEFORE cloning to capture post-init state
+    simulator.Initialize()
     logger.info("Simulation initialized. Ready to run.")
 
     # Add UX controls
@@ -135,9 +167,57 @@ def main() -> None:
     meshcat.AddButton("Pause", "KeyP")
     meshcat.AddButton("Stop", "KeyQ")
 
-    # Run simulation
-    duration = 2.0
-    _run_simulation_loop(meshcat, simulator, diagram, context, duration)
+    logger.info("Simulation running. Use Meshcat controls to interact.")
+    logger.info("Click 'Stop' in Meshcat or press Ctrl+C in terminal to exit.")
+
+    # Save initial state for reset (Cloning context captures continuous & discrete state)
+    initial_context = context.Clone()
+
+    # State tracking for buttons
+    reset_clicks = 0
+    pause_clicks = 0
+    stop_clicks = 0
+    is_paused = False
+
+    while True:
+        try:
+            stop_triggered, is_paused, pause_clicks, stop_clicks, reset_clicks = (
+                poll_ui_state(
+                    meshcat,
+                    context,
+                    simulator,
+                    diagram,
+                    initial_context,
+                    is_paused=is_paused,
+                    pause_clicks=pause_clicks,
+                    stop_clicks=stop_clicks,
+                    reset_clicks=reset_clicks,
+                )
+            )
+
+            if stop_triggered:
+                break
+
+            # 3. Update Rate
+            rate = meshcat.GetSliderValue("Realtime Rate")
+            simulator.set_target_realtime_rate(rate)
+
+            # 4. Step Simulation
+            if not is_paused:
+                target_time = context.get_time() + STEP_SIZE_S
+                simulator.AdvanceTo(target_time)
+            else:
+                # Prevent CPU spin when paused
+                time.sleep(SLEEP_DURATION_S)
+
+        except (RuntimeError, ValueError):
+            logger.exception("A simulation error occurred")
+            break
+        except Exception:
+            # Catch-all for other non-exit exceptions (like KeyboardInterrupt if not handled)
+            # but allow clean exit if needed.
+            logger.exception("An unexpected error occurred.")
+            break
 
 
 if __name__ == "__main__":
