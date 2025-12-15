@@ -99,7 +99,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
         except Exception as e:
             LOGGER.exception("Failed to start Meshcat")
-            LOGGER.error(  # noqa: TRY400 - Exception is logged, not re-raised; chaining not applicable.
+            LOGGER.error(  # noqa: TRY400 - Manual logging preferred over re-raising.
                 "Failed to start Meshcat for Drake visualization.\n"
                 "Common causes:\n"
                 "  - Another Meshcat server is already running on the same port (default: 7000).\n"
@@ -242,7 +242,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         # Populate Kinematic Sliders
         self._build_kinematic_controls()
 
-    def _build_kinematic_controls(self) -> None:
+    def _build_kinematic_controls(self) -> None:  # noqa: PLR0915
         """Create sliders for all joints."""
         plant = self.plant
         if not plant:
@@ -285,8 +285,17 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
             # Connect
             # Use closure or partial to capture joint index
-            # joint.index() returns JointIndex wrapper, cast to int
+            # Drake's joint.index() returns a JointIndex wrapper, which is
+            # always convertible to int.
+            # By Drake API contract, JointIndex is a non-negative integer less
+            # than plant.num_joints().
             j_idx = int(joint.index())
+            if not (0 <= j_idx < plant.num_joints()):
+                msg = (
+                    f"Joint index {j_idx} out of bounds for plant with "
+                    f"{plant.num_joints()} joints."
+                )
+                raise ValueError(msg)
 
             slider.valueChanged.connect(
                 lambda val, s=spin, idx=j_idx: self._on_slider_change(val, s, idx)

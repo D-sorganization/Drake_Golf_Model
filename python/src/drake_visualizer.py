@@ -107,7 +107,7 @@ class DrakeVisualizer:
             p_BCom = M_B.get_com()
 
             # Transform to World
-            p_WCom = X_WB.multiply(p_BCom)
+            p_WCom = X_WB @ p_BCom
 
             self.meshcat.SetTransform(
                 path=f"{self.prefix}/coms/{body_name}",
