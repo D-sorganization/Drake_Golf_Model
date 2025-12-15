@@ -27,7 +27,7 @@ from .logger_utils import setup_logging
 LOGGER = logging.getLogger(__name__)
 
 SLIDER_TO_RADIAN: typing.Final[float] = (
-    0.01  # Slider units (integer) to radians conversion
+    0.01  # [rad/slider_unit] Conversion factor from slider integer values to radians
 )
 JOINT_ANGLE_MIN_RAD: typing.Final[float] = (
     -10.0
@@ -38,10 +38,10 @@ JOINT_ANGLE_MAX_RAD: typing.Final[float] = (
 
 SLIDER_RANGE_MIN: typing.Final[int] = int(
     JOINT_ANGLE_MIN_RAD / SLIDER_TO_RADIAN
-)  # [-rad * 100] slider precision factor (matches JOINT_ANGLE_MIN_RAD)
+)  # [slider_units] Computed from JOINT_ANGLE_MIN_RAD / SLIDER_TO_RADIAN
 SLIDER_RANGE_MAX: typing.Final[int] = int(
     JOINT_ANGLE_MAX_RAD / SLIDER_TO_RADIAN
-)  # [+rad * 100] slider precision factor (matches JOINT_ANGLE_MAX_RAD)
+)  # [slider_units] Computed from JOINT_ANGLE_MAX_RAD / SLIDER_TO_RADIAN
 TIME_STEP_S: typing.Final[float] = 0.01  # [s] 100Hz update rate
 MS_PER_SECOND: typing.Final[int] = 1000  # [ms/s]
 INITIAL_PELVIS_HEIGHT_M: typing.Final[float] = 1.0  # [m] Standing height
@@ -162,7 +162,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         )
 
         # Zero out velocities
-
         from numpy import zeros
 
         plant.SetVelocities(plant_context, zeros(plant.num_velocities()))
