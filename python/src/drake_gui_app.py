@@ -93,7 +93,10 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             LOGGER.info("Meshcat available at: %s", self.meshcat.web_url())
 
             # Open browser automatically (optional, maybe configurable)
-            webbrowser.open(self.meshcat.web_url())
+            # Check if meshcat instance is valid before attempting to open url
+            if self.meshcat:
+                webbrowser.open(self.meshcat.web_url())
+
         except Exception as e:
             LOGGER.exception("Failed to start Meshcat")
             LOGGER.error(  # noqa: TRY400 - Exception is logged, not re-raised; chaining not applicable.
@@ -109,7 +112,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):
                 "Original exception: %s",
                 e,
             )
-            return
+            # We don't return here anymore, allowing simulation to run without Meshcat if needed
+            # But let's keep visualizer optional
+            self.meshcat = None
 
         params = GolfModelParams()
         self.diagram, self.plant, _ = build_golf_swing_diagram(
@@ -124,10 +129,12 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         if self.plant is None:
             msg = "Plant initialization failed"
             raise RuntimeError(msg)
-        if self.meshcat is None:
-            msg = "Meshcat initialization failed"
-            raise RuntimeError(msg)
-        self.visualizer = DrakeVisualizer(self.meshcat, self.plant)
+
+        # Only initialize visualizer if Meshcat is available
+        if self.meshcat is not None:
+            self.visualizer = DrakeVisualizer(self.meshcat, self.plant)
+        else:
+            LOGGER.warning("Visualizer disabled due to Meshcat initialization failure.")
 
         # Initial State
         self._reset_state()
@@ -158,6 +165,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         from numpy import zeros
 
         plant.SetVelocities(plant_context, zeros(plant.num_velocities()))
+
+        if self.simulator:
+            self.simulator.Initialize()
 
         diagram.Publish(context)
 
