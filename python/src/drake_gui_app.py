@@ -57,12 +57,17 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         self.operating_mode = "dynamic"  # "dynamic" or "kinematic"
         self.is_running = False
         self.time_step = 0.01
+        self.sliders: dict[int, QtWidgets.QSlider] = {}
+        self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = {}
 
         # Initialize Simulation
         self._init_simulation()
 
         # UI Setup
         self._setup_ui()
+
+        # Sync initial state to UI
+        self._sync_kinematic_sliders()
 
         # Timer for loop
         self.timer = QtCore.QTimer()
@@ -137,7 +142,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         # Just creating a generic reset for now.
         pelvis = plant.GetBodyByName("pelvis")
         # In newer Drake, SetFreeBodyPose takes RigidTransform
-
 
         plant.SetFreeBodyPose(plant_context, pelvis, RigidTransform([0, 0, 1.0]))
 
@@ -224,17 +228,14 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         if not plant:
             return
 
-        self.sliders: dict[int, QtWidgets.QSlider] = {}
-        self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = (
-            {}
-        )  # Map joint index to spinbox
+        self.sliders.clear()
+        self.spinboxes.clear()
 
         # Iterate over joints
         for i in range(plant.num_joints()):
             # Safe way to get joint index in PyDrake?
             # Index is typically just 'i' if iterating, but let's be careful.
             # Using Plant.get_joint(JointIndex(i))
-
 
             joint = plant.get_joint(JointIndex(i))
 
@@ -313,7 +314,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):
 
         plant_context = plant.GetMyContextFromRoot(context)
 
-
         joint = plant.get_joint(JointIndex(joint_idx))
 
         # Assuming single DOF revolute/prismatic for now
@@ -343,7 +343,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         plant_context = plant.GetMyContextFromRoot(context)
 
         for j_idx, spin in self.spinboxes.items():
-
 
             joint = plant.get_joint(JointIndex(j_idx))
             if joint.num_positions() == 1:
@@ -388,8 +387,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):
                 self.visualizer.update_frame_transforms(context)
                 self.visualizer.update_com_transforms(context)
 
-
-
     def _show_overlay_dialog(self) -> None:  # noqa: PLR0915
         """Show dialog to toggle overlays for specific bodies."""
         plant = self.plant
@@ -410,7 +407,6 @@ class DrakeSimApp(QtWidgets.QMainWindow):
 
         # List all bodies
         for i in range(plant.num_bodies()):
-
 
             body = plant.get_body(BodyIndex(i))
             name = body.name()

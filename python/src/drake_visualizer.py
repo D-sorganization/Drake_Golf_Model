@@ -1,7 +1,5 @@
 """Drake Meshcat Visualization Helper."""
 
-
-
 from pydrake.all import (
     Context,
     Cylinder,
