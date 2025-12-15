@@ -1,13 +1,14 @@
 """Drake Meshcat Visualization Helper."""
 
-from typing import Any
-import numpy as np
+
+
 from pydrake.all import (
     Context,
     Cylinder,
     Meshcat,
-    RigidTransform,
+    MultibodyPlant,
     Rgba,
+    RigidTransform,
     RotationMatrix,
     Sphere,
 )
@@ -16,7 +17,7 @@ from pydrake.all import (
 class DrakeVisualizer:
     """Helper class to manage advanced visualizations in Meshcat."""
 
-    def __init__(self, meshcat: Meshcat, plant: Any):
+    def __init__(self, meshcat: Meshcat, plant: MultibodyPlant) -> None:  # type: ignore[no-any-unimported]
         self.meshcat = meshcat
         self.plant = plant
         self.prefix = "visual_overlays"
@@ -24,10 +25,11 @@ class DrakeVisualizer:
         # Track active visualizations
         self.visible_frames: set[str] = set()
         self.visible_coms: set[str] = set()
-        self.force_arrows: list[str] = []
 
-    def toggle_frame(self, body_name: str, visible: bool) -> None:
+    def toggle_frame(self, body_name: str, visible: bool) -> None:  # noqa: FBT001
         """Toggle coordinate frame visualization for a body."""
+        from numpy import pi
+
         path = f"{self.prefix}/frames/{body_name}"
         if visible:
             # Draw X, Y, Z axes
@@ -39,7 +41,7 @@ class DrakeVisualizer:
                 f"{path}/x", Cylinder(radius, length), Rgba(1, 0, 0, 1)
             )
             X_x = RigidTransform(
-                RotationMatrix.MakeYRotation(np.pi / 2), [length / 2, 0, 0]
+                RotationMatrix.MakeYRotation(pi / 2), [length / 2, 0, 0]
             )
             self.meshcat.SetTransform(f"{path}/x", X_x)
 
@@ -48,7 +50,7 @@ class DrakeVisualizer:
                 f"{path}/y", Cylinder(radius, length), Rgba(0, 1, 0, 1)
             )
             X_y = RigidTransform(
-                RotationMatrix.MakeXRotation(-np.pi / 2), [0, length / 2, 0]
+                RotationMatrix.MakeXRotation(-pi / 2), [0, length / 2, 0]
             )
             self.meshcat.SetTransform(f"{path}/y", X_y)
 
@@ -64,7 +66,7 @@ class DrakeVisualizer:
             self.meshcat.Delete(path)
             self.visible_frames.discard(body_name)
 
-    def update_frame_transforms(self, context: Context) -> None:
+    def update_frame_transforms(self, context: Context) -> None:  # type: ignore[no-any-unimported]
         """Update transforms of visible frames."""
         plant_context = self.plant.GetMyContextFromRoot(context)
         for body_name in self.visible_frames:
@@ -73,7 +75,7 @@ class DrakeVisualizer:
             path = f"{self.prefix}/frames/{body_name}"
             self.meshcat.SetTransform(path, X_WB)
 
-    def toggle_com(self, body_name: str, visible: bool) -> None:
+    def toggle_com(self, body_name: str, visible: bool) -> None:  # noqa: FBT001
         """Toggle Center of Mass visualization for a body."""
         path = f"{self.prefix}/coms/{body_name}"
         if visible:
@@ -84,7 +86,7 @@ class DrakeVisualizer:
             self.meshcat.Delete(path)
             self.visible_coms.discard(body_name)
 
-    def update_com_transforms(self, context: Context) -> None:
+    def update_com_transforms(self, context: Context) -> None:  # type: ignore[no-any-unimported]
         """Update transforms of visible COMs."""
         plant_context = self.plant.GetMyContextFromRoot(context)
         for body_name in self.visible_coms:

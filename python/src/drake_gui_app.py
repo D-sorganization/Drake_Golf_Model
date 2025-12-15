@@ -1,28 +1,41 @@
 """Drake Golf GUI Application using PyQt6."""
 
-import sys
 import logging
-from typing import Dict, Optional, List
+import sys
+import typing
 
-import numpy as np
-from PyQt6 import QtWidgets, QtCore, QtGui
 from pydrake.all import (
+    BodyIndex,
     Context,
     Diagram,
+    JointIndex,
     Meshcat,
     MeshcatParams,
     MultibodyPlant,
-    Simulator,
-    Joint,
-    RevoluteJoint,
     PrismaticJoint,
+    RevoluteJoint,
+    RigidTransform,
+    Simulator,
 )
+from PyQt6 import QtCore, QtWidgets
 
 from .drake_golf_model import GolfModelParams, build_golf_swing_diagram
-from .logger_utils import setup_logging
 from .drake_visualizer import DrakeVisualizer
+from .logger_utils import setup_logging
 
 LOGGER = logging.getLogger(__name__)
+
+SLIDER_RANGE_MIN: typing.Final[int] = -314  # -pi radians * 100 for slider precision
+SLIDER_RANGE_MAX: typing.Final[int] = 314  # +pi radians * 100 for slider precision
+SLIDER_TO_RADIAN: typing.Final[float] = (
+    0.01  # Slider units (integer) to radians conversion
+)
+JOINT_ANGLE_MIN_RAD: typing.Final[float] = (
+    -10.0
+)  # [rad] Minimum joint angle for UI controls
+JOINT_ANGLE_MAX_RAD: typing.Final[float] = (
+    10.0  # [rad] Maximum joint angle for UI controls
+)
 
 
 class DrakeSimApp(QtWidgets.QMainWindow):
@@ -34,12 +47,12 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         self.resize(500, 800)
 
         # Simulation State
-        self.simulator: Optional[Simulator] = None
-        self.diagram: Optional[Diagram] = None
-        self.plant: Optional[MultibodyPlant] = None
-        self.context: Optional[Context] = None
-        self.meshcat: Optional[Meshcat] = None
-        self.visualizer: Optional[DrakeVisualizer] = None
+        self.simulator: Simulator | None = None  # type: ignore[no-any-unimported]
+        self.diagram: Diagram | None = None  # type: ignore[no-any-unimported]
+        self.plant: MultibodyPlant | None = None  # type: ignore[no-any-unimported]
+        self.context: Context | None = None  # type: ignore[no-any-unimported]
+        self.meshcat: Meshcat | None = None  # type: ignore[no-any-unimported]
+        self.visualizer: DrakeVisualizer | None = None
 
         self.operating_mode = "dynamic"  # "dynamic" or "kinematic"
         self.is_running = False
@@ -65,12 +78,25 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             LOGGER.info("Meshcat available at: %s", self.meshcat.web_url())
 
             # Open browser automatically (optional, maybe configurable)
-            import webbrowser
+            import webbrowser  # noqa: PLC0415
 
             webbrowser.open(self.meshcat.web_url())
 
         except Exception as e:
-            LOGGER.error(f"Failed to start Meshcat: {e}")
+            LOGGER.exception("Failed to start Meshcat")
+            LOGGER.error(  # noqa: TRY400
+                "Failed to start Meshcat for Drake visualization.\n"
+                "Common causes:\n"
+                "  - Another Meshcat server is already running on the same port (default: 7000).\n"
+                "  - Network issues or firewall blocking localhost.\n"
+                "  - Meshcat or its dependencies are not installed correctly.\n"
+                "Troubleshooting steps:\n"
+                "  1. Check if another Meshcat process is running and terminate it if necessary.\n"
+                "  2. Verify that your firewall allows connections to localhost:7000.\n"
+                "  3. Ensure all required Python packages are installed (see project README).\n"
+                "Original exception: %s",
+                e,
+            )
             return
 
         params = GolfModelParams()
@@ -81,10 +107,14 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         self.simulator = Simulator(self.diagram)
         self.simulator.set_target_realtime_rate(1.0)
         self.simulator.Initialize()
-        
+
         self.context = self.simulator.get_mutable_context()
-        assert self.plant is not None
-        assert self.meshcat is not None
+        if self.plant is None:
+            msg = "Plant initialization failed"
+            raise RuntimeError(msg)
+        if self.meshcat is None:
+            msg = "Meshcat initialization failed"
+            raise RuntimeError(msg)
         self.visualizer = DrakeVisualizer(self.meshcat, self.plant)
 
         # Initial State
@@ -95,7 +125,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         plant = self.plant
         context = self.context
         diagram = self.diagram
-        
+
         if not plant or not context or not diagram:
             return
 
@@ -107,23 +137,25 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         # Just creating a generic reset for now.
         pelvis = plant.GetBodyByName("pelvis")
         # In newer Drake, SetFreeBodyPose takes RigidTransform
-        from pydrake.all import RigidTransform
+
 
         plant.SetFreeBodyPose(plant_context, pelvis, RigidTransform([0, 0, 1.0]))
 
         # Zero out velocities
-        plant.SetVelocities(plant_context, np.zeros(plant.num_velocities()))
+        from numpy import zeros
+
+        plant.SetVelocities(plant_context, zeros(plant.num_velocities()))
 
         diagram.Publish(context)
 
         # Sync generic UI controls if needed
         self._sync_kinematic_sliders()
 
-    def _setup_ui(self) -> None:
+    def _setup_ui(self) -> None:  # noqa: PLR0915
         """Build the PyQt Interface."""
         # ... (implementation same as before, no state access needed here mostly) ...
         # But wait, _build_kinematic_controls uses state.
-        
+
         central_widget = QtWidgets.QWidget()
         self.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
@@ -192,8 +224,8 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         if not plant:
             return
 
-        self.sliders: Dict[int, QtWidgets.QSlider] = {}
-        self.spinboxes: Dict[int, QtWidgets.QDoubleSpinBox] = (
+        self.sliders: dict[int, QtWidgets.QSlider] = {}
+        self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = (
             {}
         )  # Map joint index to spinbox
 
@@ -202,7 +234,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             # Safe way to get joint index in PyDrake?
             # Index is typically just 'i' if iterating, but let's be careful.
             # Using Plant.get_joint(JointIndex(i))
-            from pydrake.all import JointIndex
+
 
             joint = plant.get_joint(JointIndex(i))
 
@@ -221,12 +253,12 @@ class DrakeSimApp(QtWidgets.QMainWindow):
 
             # Slider
             slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-            slider.setRange(-314, 314)  # -Pi to +Pi approx (x100)
+            slider.setRange(SLIDER_RANGE_MIN, SLIDER_RANGE_MAX)
             slider.setValue(0)
 
             # Spinbox
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setRange(-10.0, 10.0)  # Radians
+            spin.setRange(JOINT_ANGLE_MIN_RAD, JOINT_ANGLE_MAX_RAD)
             spin.setSingleStep(0.1)
             spin.setDecimals(3)
 
@@ -253,18 +285,18 @@ class DrakeSimApp(QtWidgets.QMainWindow):
     def _on_slider_change(
         self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int
     ) -> None:
-        radian = val / 100.0
-        spin.blockSignals(True)
+        radian = val * SLIDER_TO_RADIAN
+        spin.blockSignals(True)  # noqa: FBT003
         spin.setValue(radian)
-        spin.blockSignals(False)
+        spin.blockSignals(False)  # noqa: FBT003
         self._update_joint_pos(joint_idx, radian)
 
     def _on_spin_change(
         self, val: float, slider: QtWidgets.QSlider, joint_idx: int
     ) -> None:
-        slider.blockSignals(True)
-        slider.setValue(int(val * 100))
-        slider.blockSignals(False)
+        slider.blockSignals(True)  # noqa: FBT003
+        slider.setValue(int(val / SLIDER_TO_RADIAN))
+        slider.blockSignals(False)  # noqa: FBT003
         self._update_joint_pos(joint_idx, val)
 
     def _update_joint_pos(self, joint_idx: int, angle: float) -> None:
@@ -275,21 +307,19 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         plant = self.plant
         context = self.context
         diagram = self.diagram
-        
+
         if not plant or not context or not diagram:
             return
 
         plant_context = plant.GetMyContextFromRoot(context)
-        from pydrake.all import JointIndex
+
 
         joint = plant.get_joint(JointIndex(joint_idx))
 
         # Assuming single DOF revolute/prismatic for now
         if joint.num_positions() == 1:
             # Generic way:
-            plant.SetPositions(plant_context, joint.index(), [angle])  # Check API
-            # Actually plant.SetPositions works on the whole plant or model instance.
-            # To set single joint:
+            # joint.index() returns JointIndex wrapper, cast to int
             # joint.set_angle(plant_context, angle) is for RevoluteJoint
             if isinstance(joint, RevoluteJoint):
                 joint.set_angle(plant_context, angle)
@@ -313,7 +343,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         plant_context = plant.GetMyContextFromRoot(context)
 
         for j_idx, spin in self.spinboxes.items():
-            from pydrake.all import JointIndex
+
 
             joint = plant.get_joint(JointIndex(j_idx))
             if joint.num_positions() == 1:
@@ -332,7 +362,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             self.operating_mode = "dynamic"
             self.controls_stack.setCurrentIndex(0)
 
-    def _toggle_run(self, checked: bool) -> None:
+    def _toggle_run(self, checked: bool) -> None:  # noqa: FBT001
         self.is_running = checked
         self.btn_run.setText("Stop Simulation" if checked else "Run Simulation")
 
@@ -345,7 +375,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
     def _game_loop(self) -> None:
         simulator = self.simulator
         context = self.context
-        
+
         if not simulator or not context:
             return
 
@@ -358,16 +388,15 @@ class DrakeSimApp(QtWidgets.QMainWindow):
                 self.visualizer.update_frame_transforms(context)
                 self.visualizer.update_com_transforms(context)
 
-        # Force Publish just in case (meshcat handles rate limiting usually)
-        # self.diagram.Publish(self.context) # AdvanceTo publishes.
 
-    def _show_overlay_dialog(self) -> None:
+
+    def _show_overlay_dialog(self) -> None:  # noqa: PLR0915
         """Show dialog to toggle overlays for specific bodies."""
         plant = self.plant
         diagram = self.diagram
         context = self.context
         visualizer = self.visualizer
-        
+
         if not plant or not diagram or not context or not visualizer:
             return
 
@@ -381,7 +410,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
 
         # List all bodies
         for i in range(plant.num_bodies()):
-            from pydrake.all import BodyIndex
+
 
             body = plant.get_body(BodyIndex(i))
             name = body.name()
@@ -394,9 +423,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             chk_frame = QtWidgets.QCheckBox("Frame")
             is_vis_f = name in visualizer.visible_frames
             chk_frame.setChecked(is_vis_f)
-            chk_frame.toggled.connect(
-                lambda c, n=name: visualizer.toggle_frame(n, c)
-            )
+            chk_frame.toggled.connect(lambda c, n=name: visualizer.toggle_frame(n, c))
 
             chk_com = QtWidgets.QCheckBox("COM")
             is_vis_c = name in visualizer.visible_coms
@@ -421,6 +448,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         # Refresh kinematics to update frame positions immediately
         if self.operating_mode == "kinematic":
             diagram.Publish(context)
+            if self.visualizer:
+                self.visualizer.update_frame_transforms(context)
+                self.visualizer.update_com_transforms(context)
 
 
 def main() -> None:

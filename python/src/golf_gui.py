@@ -1,8 +1,10 @@
 """Golf Analysis Suite GUI Entry Point."""
 
-import sys
 import logging
+import sys
+
 from PyQt6 import QtWidgets
+
 from .drake_gui_app import DrakeSimApp
 from .logger_utils import setup_logging
 

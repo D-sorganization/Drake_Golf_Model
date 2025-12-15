@@ -41,4 +41,5 @@ drake>=1.22.0
 qpsolvers
 osqp>=0.6.3
 scs~=3.2.4
-quadprog~=0.1.11PyQt6
+quadprog~=0.1.11
+PyQt6
