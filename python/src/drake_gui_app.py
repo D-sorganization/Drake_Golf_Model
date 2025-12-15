@@ -47,6 +47,10 @@ MS_PER_SECOND: typing.Final[int] = 1000  # [ms/s]
 INITIAL_PELVIS_HEIGHT_M: typing.Final[float] = 1.0  # [m] Standing height
 SPINBOX_STEP_RAD: typing.Final[float] = 0.1  # [rad] Step size for UI
 
+# UI Styles
+STYLE_BUTTON_RUN: typing.Final[str] = "background-color: #ccffcc;"  # Light Green
+STYLE_BUTTON_STOP: typing.Final[str] = "background-color: #ffcccc;"  # Light Red
+
 
 class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimported]
     """Main GUI Window for Drake Golf Simulation."""
@@ -188,6 +192,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         mode_layout = QtWidgets.QHBoxLayout()
         self.mode_combo = QtWidgets.QComboBox()
         self.mode_combo.addItems(["Dynamic (Physics)", "Kinematic (Pose)"])
+        self.mode_combo.setToolTip(
+            "Select between physics simulation or manual pose control"
+        )
         self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
         mode_layout.addWidget(self.mode_combo)
@@ -202,12 +209,15 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         dynamic_page = QtWidgets.QWidget()
         dyn_layout = QtWidgets.QVBoxLayout(dynamic_page)
 
-        self.btn_run = QtWidgets.QPushButton("Run Simulation")
+        self.btn_run = QtWidgets.QPushButton("▶ Run Simulation")
         self.btn_run.setCheckable(True)
+        self.btn_run.setToolTip("Start or stop the physics simulation")
+        self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
         self.btn_run.clicked.connect(self._toggle_run)
         dyn_layout.addWidget(self.btn_run)
 
         self.btn_reset = QtWidgets.QPushButton("Reset")
+        self.btn_reset.setToolTip("Reset the simulation to the initial state")
         self.btn_reset.clicked.connect(self._reset_simulation)
         dyn_layout.addWidget(self.btn_reset)
 
@@ -232,11 +242,17 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         vis_layout = QtWidgets.QVBoxLayout()
 
         self.btn_overlays = QtWidgets.QPushButton("Manage Body Overlays")
+        self.btn_overlays.setToolTip(
+            "Toggle visibility of reference frames and centers of mass"
+        )
         self.btn_overlays.clicked.connect(self._show_overlay_dialog)
         vis_layout.addWidget(self.btn_overlays)
 
         vis_group.setLayout(vis_layout)
         layout.addWidget(vis_group)
+
+        # Status Bar
+        self._update_status("Ready")
 
         # Populate Kinematic Sliders
         self._build_kinematic_controls()
@@ -275,6 +291,21 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
             slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             slider.setRange(SLIDER_RANGE_MIN, SLIDER_RANGE_MAX)
             slider.setValue(0)
+
+            # Determine joint limits for tooltip: prefer physical, else UI
+            try:
+                # For single-DOF joints, these are length-1 arrays
+                # We need to access limits from the plant or joint model
+                joint_min = float(joint.position_lower_limits()[0])
+                joint_max = float(joint.position_upper_limits()[0])
+            except Exception:  # noqa: BLE001
+                # Fallback to UI limits if joint does not provide limits
+                joint_min = JOINT_ANGLE_MIN_RAD
+                joint_max = JOINT_ANGLE_MAX_RAD
+
+            slider.setToolTip(
+                f"Adjust angle for {joint.name()} (radians, {joint_min:.2f} to {joint_max:.2f})"
+            )
 
             # Spinbox
             spin = QtWidgets.QDoubleSpinBox()
@@ -375,33 +406,54 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
                 val = joint.GetOnePosition(plant_context)
                 spin.setValue(val)
 
+    def _update_status(self, message: str) -> None:
+        """Update status bar message safely."""
+        status_bar = self.statusBar()
+        if status_bar:
+            status_bar.showMessage(message)
+
     def _on_mode_changed(self, text: str) -> None:
         if "Kinematic" in text:
             self.operating_mode = "kinematic"
             self.controls_stack.setCurrentIndex(1)
             self.is_running = False
             self.btn_run.setChecked(False)
+            self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
+            self.btn_run.setText("▶ Run Simulation")
+            self._update_status("Mode: Kinematic Control")
             self._sync_kinematic_sliders()
             # Stop physics, allow manual
         else:
             self.operating_mode = "dynamic"
             self.controls_stack.setCurrentIndex(0)
+            self._update_status("Mode: Dynamic Simulation")
             # Ensure simulation resumes or is stopped
             if self.is_running:
-                self.btn_run.setText("Stop Simulation")
+                self.btn_run.setText("■ Stop Simulation")
                 self.btn_run.setChecked(True)
+                self.btn_run.setStyleSheet(STYLE_BUTTON_STOP)
             else:
-                self.btn_run.setText("Run Simulation")
+                self.btn_run.setText("▶ Run Simulation")
                 self.btn_run.setChecked(False)
+                self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
 
     def _toggle_run(self, checked: bool) -> None:  # noqa: FBT001
         self.is_running = checked
-        self.btn_run.setText("Stop Simulation" if checked else "Run Simulation")
+        if checked:
+            self.btn_run.setText("■ Stop Simulation")
+            self.btn_run.setStyleSheet(STYLE_BUTTON_STOP)
+            self._update_status("Simulation Running...")
+        else:
+            self.btn_run.setText("▶ Run Simulation")
+            self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
+            self._update_status("Simulation Stopped.")
 
     def _reset_simulation(self) -> None:
         self.is_running = False
         self.btn_run.setChecked(False)
-        self.btn_run.setText("Run Simulation")
+        self.btn_run.setText("▶ Run Simulation")
+        self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
+        self._update_status("Simulation Reset.")
         self._reset_state()
 
     def _game_loop(self) -> None:
