@@ -192,7 +192,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         mode_layout = QtWidgets.QHBoxLayout()
         self.mode_combo = QtWidgets.QComboBox()
         self.mode_combo.addItems(["Dynamic (Physics)", "Kinematic (Pose)"])
-        self.mode_combo.setToolTip("Select between physics simulation or manual pose control")
+        self.mode_combo.setToolTip(
+            "Select between physics simulation or manual pose control"
+        )
         self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
         mode_layout.addWidget(self.mode_combo)
