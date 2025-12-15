@@ -48,7 +48,7 @@ INITIAL_PELVIS_HEIGHT_M: typing.Final[float] = 1.0  # [m] Standing height
 SPINBOX_STEP_RAD: typing.Final[float] = 0.1  # [rad] Step size for UI
 
 
-class DrakeSimApp(QtWidgets.QMainWindow):
+class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimported]
     """Main GUI Window for Drake Golf Simulation."""
 
     def __init__(self) -> None:
@@ -67,8 +67,8 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         self.operating_mode = "dynamic"  # "dynamic" or "kinematic"
         self.is_running = False
         self.time_step = TIME_STEP_S
-        self.sliders: dict[int, QtWidgets.QSlider] = {}
-        self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = {}
+        self.sliders: dict[int, QtWidgets.QSlider] = {}  # type: ignore[no-any-unimported]
+        self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = {}  # type: ignore[no-any-unimported]
 
         # Initialize Simulation
         self._init_simulation()
@@ -303,7 +303,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             self.spinboxes[j_idx] = spin
 
     def _on_slider_change(
-        self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int
+        self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int  # type: ignore[no-any-unimported]
     ) -> None:
         radian = val * SLIDER_TO_RADIAN
         spin.blockSignals(True)  # noqa: FBT003
@@ -312,7 +312,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         self._update_joint_pos(joint_idx, radian)
 
     def _on_spin_change(
-        self, val: float, slider: QtWidgets.QSlider, joint_idx: int
+        self, val: float, slider: QtWidgets.QSlider, joint_idx: int  # type: ignore[no-any-unimported]
     ) -> None:
         slider.blockSignals(True)  # noqa: FBT003
         slider.setValue(int(val / SLIDER_TO_RADIAN))
