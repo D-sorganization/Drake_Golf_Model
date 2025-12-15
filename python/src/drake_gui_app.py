@@ -1,8 +1,10 @@
 """Drake Golf GUI Application using PyQt6."""
 
 import logging
+import math
 import sys
 import typing
+import webbrowser
 
 from pydrake.all import (
     BodyIndex,
@@ -25,17 +27,25 @@ from .logger_utils import setup_logging
 
 LOGGER = logging.getLogger(__name__)
 
-SLIDER_RANGE_MIN: typing.Final[int] = -314  # -pi radians * 100 for slider precision
-SLIDER_RANGE_MAX: typing.Final[int] = 314  # +pi radians * 100 for slider precision
+SLIDER_RANGE_MIN: typing.Final[int] = int(
+    -math.pi * 100
+)  # [-rad * 100] slider precision factor
+SLIDER_RANGE_MAX: typing.Final[int] = int(
+    math.pi * 100
+)  # [+rad * 100] slider precision factor
 SLIDER_TO_RADIAN: typing.Final[float] = (
     0.01  # Slider units (integer) to radians conversion
 )
 JOINT_ANGLE_MIN_RAD: typing.Final[float] = (
     -10.0
-)  # [rad] Minimum joint angle for UI controls
+)  # [rad] Minimum joint angle for UI controls (Safety limit)
 JOINT_ANGLE_MAX_RAD: typing.Final[float] = (
-    10.0  # [rad] Maximum joint angle for UI controls
+    10.0  # [rad] Maximum joint angle for UI controls (Safety limit)
 )
+TIME_STEP_S: typing.Final[float] = 0.01  # [s] 100Hz update rate
+MS_PER_SECOND: typing.Final[int] = 1000  # [ms/s]
+INITIAL_PELVIS_HEIGHT_M: typing.Final[float] = 1.0  # [m] Standing height
+SPINBOX_STEP_RAD: typing.Final[float] = 0.1  # [rad] Step size for UI
 
 
 class DrakeSimApp(QtWidgets.QMainWindow):
@@ -56,7 +66,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
 
         self.operating_mode = "dynamic"  # "dynamic" or "kinematic"
         self.is_running = False
-        self.time_step = 0.01
+        self.time_step = TIME_STEP_S
         self.sliders: dict[int, QtWidgets.QSlider] = {}
         self.spinboxes: dict[int, QtWidgets.QDoubleSpinBox] = {}
 
@@ -72,7 +82,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         # Timer for loop
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self._game_loop)
-        self.timer.start(int(self.time_step * 1000))
+        self.timer.start(int(self.time_step * MS_PER_SECOND))
 
     def _init_simulation(self) -> None:
         """Initialize Drake simulation and Meshcat."""
@@ -83,13 +93,10 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             LOGGER.info("Meshcat available at: %s", self.meshcat.web_url())
 
             # Open browser automatically (optional, maybe configurable)
-            import webbrowser  # noqa: PLC0415
-
             webbrowser.open(self.meshcat.web_url())
-
         except Exception as e:
             LOGGER.exception("Failed to start Meshcat")
-            LOGGER.error(  # noqa: TRY400
+            LOGGER.error(  # noqa: TRY400 - Exception is logged, not re-raised; chaining not applicable.
                 "Failed to start Meshcat for Drake visualization.\n"
                 "Common causes:\n"
                 "  - Another Meshcat server is already running on the same port (default: 7000).\n"
@@ -143,7 +150,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):
         pelvis = plant.GetBodyByName("pelvis")
         # In newer Drake, SetFreeBodyPose takes RigidTransform
 
-        plant.SetFreeBodyPose(plant_context, pelvis, RigidTransform([0, 0, 1.0]))
+        plant.SetFreeBodyPose(
+            plant_context, pelvis, RigidTransform([0, 0, INITIAL_PELVIS_HEIGHT_M])
+        )
 
         # Zero out velocities
         from numpy import zeros
@@ -260,7 +269,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):
             # Spinbox
             spin = QtWidgets.QDoubleSpinBox()
             spin.setRange(JOINT_ANGLE_MIN_RAD, JOINT_ANGLE_MAX_RAD)
-            spin.setSingleStep(0.1)
+            spin.setSingleStep(SPINBOX_STEP_RAD)
             spin.setDecimals(3)
 
             # Connect

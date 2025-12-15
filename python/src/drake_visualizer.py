@@ -1,5 +1,7 @@
 """Drake Meshcat Visualization Helper."""
 
+import typing
+
 from pydrake.all import (
     Context,
     Cylinder,
@@ -10,6 +12,12 @@ from pydrake.all import (
     RotationMatrix,
     Sphere,
 )
+
+FRAME_AXIS_LENGTH_M: typing.Final[float] = (
+    0.2  # [m] Axle length for frame visualization
+)
+FRAME_AXIS_RADIUS_M: typing.Final[float] = 0.005  # [m] Axle radius
+COM_SPHERE_RADIUS_M: typing.Final[float] = 0.015  # [m] COM marker radius
 
 
 class DrakeVisualizer:
@@ -31,8 +39,8 @@ class DrakeVisualizer:
         path = f"{self.prefix}/frames/{body_name}"
         if visible:
             # Draw X, Y, Z axes
-            length = 0.2
-            radius = 0.005
+            length = FRAME_AXIS_LENGTH_M
+            radius = FRAME_AXIS_RADIUS_M
 
             # X Axis (Red)
             self.meshcat.SetObject(
@@ -78,7 +86,9 @@ class DrakeVisualizer:
         path = f"{self.prefix}/coms/{body_name}"
         if visible:
             # Sphere for COM
-            self.meshcat.SetObject(path, Sphere(0.015), Rgba(1, 1, 0, 1))  # Yellow
+            self.meshcat.SetObject(
+                path, Sphere(COM_SPHERE_RADIUS_M), Rgba(1, 1, 0, 1)
+            )  # Yellow
             self.visible_coms.add(body_name)
         else:
             self.meshcat.Delete(path)
