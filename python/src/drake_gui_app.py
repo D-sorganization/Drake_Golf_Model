@@ -1,7 +1,6 @@
 """Drake Golf GUI Application using PyQt6."""
 
 import logging
-import math
 import sys
 import typing
 import webbrowser
@@ -27,12 +26,6 @@ from .logger_utils import setup_logging
 
 LOGGER = logging.getLogger(__name__)
 
-SLIDER_RANGE_MIN: typing.Final[int] = int(
-    -math.pi * 100
-)  # [-rad * 100] slider precision factor
-SLIDER_RANGE_MAX: typing.Final[int] = int(
-    math.pi * 100
-)  # [+rad * 100] slider precision factor
 SLIDER_TO_RADIAN: typing.Final[float] = (
     0.01  # Slider units (integer) to radians conversion
 )
@@ -42,6 +35,13 @@ JOINT_ANGLE_MIN_RAD: typing.Final[float] = (
 JOINT_ANGLE_MAX_RAD: typing.Final[float] = (
     10.0  # [rad] Maximum joint angle for UI controls (Safety limit)
 )
+
+SLIDER_RANGE_MIN: typing.Final[int] = int(
+    JOINT_ANGLE_MIN_RAD / SLIDER_TO_RADIAN
+)  # [-rad * 100] slider precision factor (matches JOINT_ANGLE_MIN_RAD)
+SLIDER_RANGE_MAX: typing.Final[int] = int(
+    JOINT_ANGLE_MAX_RAD / SLIDER_TO_RADIAN
+)  # [+rad * 100] slider precision factor (matches JOINT_ANGLE_MAX_RAD)
 TIME_STEP_S: typing.Final[float] = 0.01  # [s] 100Hz update rate
 MS_PER_SECOND: typing.Final[int] = 1000  # [ms/s]
 INITIAL_PELVIS_HEIGHT_M: typing.Final[float] = 1.0  # [m] Standing height
@@ -162,6 +162,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         )
 
         # Zero out velocities
+
         from numpy import zeros
 
         plant.SetVelocities(plant_context, zeros(plant.num_velocities()))
@@ -258,8 +259,8 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
             joint = plant.get_joint(JointIndex(i))
 
-            # Skip welds (0 DOF)
-            if joint.num_positions() == 0:
+            # Skip welds (0 DOF) and multi-DOF joints (not yet supported)
+            if joint.num_positions() != 1:
                 continue
 
             # Create control row
@@ -306,17 +307,15 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int  # type: ignore[no-any-unimported]
     ) -> None:
         radian = val * SLIDER_TO_RADIAN
-        spin.blockSignals(True)  # noqa: FBT003
-        spin.setValue(radian)
-        spin.blockSignals(False)  # noqa: FBT003
+        with QtCore.QSignalBlocker(spin):
+            spin.setValue(radian)
         self._update_joint_pos(joint_idx, radian)
 
     def _on_spin_change(
         self, val: float, slider: QtWidgets.QSlider, joint_idx: int  # type: ignore[no-any-unimported]
     ) -> None:
-        slider.blockSignals(True)  # noqa: FBT003
-        slider.setValue(int(val / SLIDER_TO_RADIAN))
-        slider.blockSignals(False)  # noqa: FBT003
+        with QtCore.QSignalBlocker(slider):
+            slider.setValue(int(val / SLIDER_TO_RADIAN))
         self._update_joint_pos(joint_idx, val)
 
     def _update_joint_pos(self, joint_idx: int, angle: float) -> None:
@@ -379,6 +378,13 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         else:
             self.operating_mode = "dynamic"
             self.controls_stack.setCurrentIndex(0)
+            # Ensure simulation resumes or is stopped
+            if self.is_running:
+                self.btn_run.setText("Stop Simulation")
+                self.btn_run.setChecked(True)
+            else:
+                self.btn_run.setText("Run Simulation")
+                self.btn_run.setChecked(False)
 
     def _toggle_run(self, checked: bool) -> None:  # noqa: FBT001
         self.is_running = checked
