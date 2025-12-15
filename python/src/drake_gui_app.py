@@ -1,0 +1,435 @@
+"""Drake Golf GUI Application using PyQt6."""
+
+import sys
+import logging
+from typing import Dict, Optional, List
+
+import numpy as np
+from PyQt6 import QtWidgets, QtCore, QtGui
+from pydrake.all import (
+    Context,
+    Diagram,
+    Meshcat,
+    MeshcatParams,
+    MultibodyPlant,
+    Simulator,
+    Joint,
+    RevoluteJoint,
+    PrismaticJoint,
+)
+
+from .drake_golf_model import GolfModelParams, build_golf_swing_diagram
+from .logger_utils import setup_logging
+from .drake_visualizer import DrakeVisualizer
+
+LOGGER = logging.getLogger(__name__)
+
+
+class DrakeSimApp(QtWidgets.QMainWindow):
+    """Main GUI Window for Drake Golf Simulation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("Drake Golf Swing Analysis")
+        self.resize(500, 800)
+
+        # Simulation State
+        self.simulator: Optional[Simulator] = None
+        self.diagram: Optional[Diagram] = None
+        self.plant: Optional[MultibodyPlant] = None
+        self.context: Optional[Context] = None
+        self.meshcat: Optional[Meshcat] = None
+        self.visualizer: Optional[DrakeVisualizer] = None
+
+        self.operating_mode = "dynamic"  # "dynamic" or "kinematic"
+        self.is_running = False
+        self.time_step = 0.01
+
+        # Initialize Simulation
+        self._init_simulation()
+
+        # UI Setup
+        self._setup_ui()
+
+        # Timer for loop
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self._game_loop)
+        self.timer.start(int(self.time_step * 1000))
+
+    def _init_simulation(self) -> None:
+        """Initialize Drake simulation and Meshcat."""
+        try:
+            meshcat_params = MeshcatParams()
+            meshcat_params.host = "localhost"
+            self.meshcat = Meshcat(meshcat_params)
+            LOGGER.info("Meshcat available at: %s", self.meshcat.web_url())
+
+            # Open browser automatically (optional, maybe configurable)
+            import webbrowser
+
+            webbrowser.open(self.meshcat.web_url())
+
+        except Exception as e:
+            LOGGER.error(f"Failed to start Meshcat: {e}")
+            return
+
+        params = GolfModelParams()
+        self.diagram, self.plant, _ = build_golf_swing_diagram(
+            params, meshcat=self.meshcat
+        )
+
+        self.simulator = Simulator(self.diagram)
+        self.simulator.set_target_realtime_rate(1.0)
+        self.simulator.Initialize()
+        
+        self.context = self.simulator.get_mutable_context()
+        assert self.plant is not None
+        assert self.meshcat is not None
+        self.visualizer = DrakeVisualizer(self.meshcat, self.plant)
+
+        # Initial State
+        self._reset_state()
+
+    def _reset_state(self) -> None:
+        """Reset simulation state."""
+        plant = self.plant
+        context = self.context
+        diagram = self.diagram
+        
+        if not plant or not context or not diagram:
+            return
+
+        context.SetTime(0.0)
+        plant_context = plant.GetMyContextFromRoot(context)
+
+        # Set default pose (standing)
+        # We need to find the specific joints or bodies.
+        # Just creating a generic reset for now.
+        pelvis = plant.GetBodyByName("pelvis")
+        # In newer Drake, SetFreeBodyPose takes RigidTransform
+        from pydrake.all import RigidTransform
+
+        plant.SetFreeBodyPose(plant_context, pelvis, RigidTransform([0, 0, 1.0]))
+
+        # Zero out velocities
+        plant.SetVelocities(plant_context, np.zeros(plant.num_velocities()))
+
+        diagram.Publish(context)
+
+        # Sync generic UI controls if needed
+        self._sync_kinematic_sliders()
+
+    def _setup_ui(self) -> None:
+        """Build the PyQt Interface."""
+        # ... (implementation same as before, no state access needed here mostly) ...
+        # But wait, _build_kinematic_controls uses state.
+        
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
+
+        # 1. Mode Selector
+        mode_group = QtWidgets.QGroupBox("Operating Mode")
+        mode_layout = QtWidgets.QHBoxLayout()
+        self.mode_combo = QtWidgets.QComboBox()
+        self.mode_combo.addItems(["Dynamic (Physics)", "Kinematic (Pose)"])
+        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
+        mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
+        mode_layout.addWidget(self.mode_combo)
+        mode_group.setLayout(mode_layout)
+        layout.addWidget(mode_group)
+
+        # 2. Controls Area (Stack)
+        self.controls_stack = QtWidgets.QStackedWidget()
+        layout.addWidget(self.controls_stack)
+
+        # -- Page 1: Dynamic Controls
+        dynamic_page = QtWidgets.QWidget()
+        dyn_layout = QtWidgets.QVBoxLayout(dynamic_page)
+
+        self.btn_run = QtWidgets.QPushButton("Run Simulation")
+        self.btn_run.setCheckable(True)
+        self.btn_run.clicked.connect(self._toggle_run)
+        dyn_layout.addWidget(self.btn_run)
+
+        self.btn_reset = QtWidgets.QPushButton("Reset")
+        self.btn_reset.clicked.connect(self._reset_simulation)
+        dyn_layout.addWidget(self.btn_reset)
+
+        dyn_layout.addStretch()
+        self.controls_stack.addWidget(dynamic_page)
+
+        # -- Page 2: Kinematic Controls
+        kinematic_page = QtWidgets.QWidget()
+        kin_layout = QtWidgets.QVBoxLayout(kinematic_page)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        self.kinematic_content = QtWidgets.QWidget()
+        self.kinematic_layout = QtWidgets.QVBoxLayout(self.kinematic_content)
+        scroll.setWidget(self.kinematic_content)
+
+        kin_layout.addWidget(scroll)
+        self.controls_stack.addWidget(kinematic_page)
+
+        # 3. Visualization Toggles
+        vis_group = QtWidgets.QGroupBox("Visualization")
+        vis_layout = QtWidgets.QVBoxLayout()
+
+        self.btn_overlays = QtWidgets.QPushButton("Manage Body Overlays")
+        self.btn_overlays.clicked.connect(self._show_overlay_dialog)
+        vis_layout.addWidget(self.btn_overlays)
+
+        vis_group.setLayout(vis_layout)
+        layout.addWidget(vis_group)
+
+        # Populate Kinematic Sliders
+        self._build_kinematic_controls()
+
+    def _build_kinematic_controls(self) -> None:
+        """Create sliders for all joints."""
+        plant = self.plant
+        if not plant:
+            return
+
+        self.sliders: Dict[int, QtWidgets.QSlider] = {}
+        self.spinboxes: Dict[int, QtWidgets.QDoubleSpinBox] = (
+            {}
+        )  # Map joint index to spinbox
+
+        # Iterate over joints
+        for i in range(plant.num_joints()):
+            # Safe way to get joint index in PyDrake?
+            # Index is typically just 'i' if iterating, but let's be careful.
+            # Using Plant.get_joint(JointIndex(i))
+            from pydrake.all import JointIndex
+
+            joint = plant.get_joint(JointIndex(i))
+
+            # Skip welds (0 DOF)
+            if joint.num_positions() == 0:
+                continue
+
+            # Create control row
+            row = QtWidgets.QWidget()
+            row_layout = QtWidgets.QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
+            label = QtWidgets.QLabel(f"{joint.name()}:")
+            label.setMinimumWidth(120)
+            row_layout.addWidget(label)
+
+            # Slider
+            slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+            slider.setRange(-314, 314)  # -Pi to +Pi approx (x100)
+            slider.setValue(0)
+
+            # Spinbox
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setRange(-10.0, 10.0)  # Radians
+            spin.setSingleStep(0.1)
+            spin.setDecimals(3)
+
+            # Connect
+            # Use closure or partial to capture joint index
+            # joint.index() returns JointIndex wrapper, cast to int
+            j_idx = int(joint.index())
+
+            slider.valueChanged.connect(
+                lambda val, s=spin, idx=j_idx: self._on_slider_change(val, s, idx)
+            )
+            spin.valueChanged.connect(
+                lambda val, s=slider, idx=j_idx: self._on_spin_change(val, s, idx)
+            )
+
+            row_layout.addWidget(slider)
+            row_layout.addWidget(spin)
+
+            self.kinematic_layout.addWidget(row)
+
+            self.sliders[j_idx] = slider
+            self.spinboxes[j_idx] = spin
+
+    def _on_slider_change(
+        self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int
+    ) -> None:
+        radian = val / 100.0
+        spin.blockSignals(True)
+        spin.setValue(radian)
+        spin.blockSignals(False)
+        self._update_joint_pos(joint_idx, radian)
+
+    def _on_spin_change(
+        self, val: float, slider: QtWidgets.QSlider, joint_idx: int
+    ) -> None:
+        slider.blockSignals(True)
+        slider.setValue(int(val * 100))
+        slider.blockSignals(False)
+        self._update_joint_pos(joint_idx, val)
+
+    def _update_joint_pos(self, joint_idx: int, angle: float) -> None:
+        """Update joint position in plant context."""
+        if self.operating_mode != "kinematic":
+            return
+
+        plant = self.plant
+        context = self.context
+        diagram = self.diagram
+        
+        if not plant or not context or not diagram:
+            return
+
+        plant_context = plant.GetMyContextFromRoot(context)
+        from pydrake.all import JointIndex
+
+        joint = plant.get_joint(JointIndex(joint_idx))
+
+        # Assuming single DOF revolute/prismatic for now
+        if joint.num_positions() == 1:
+            # Generic way:
+            plant.SetPositions(plant_context, joint.index(), [angle])  # Check API
+            # Actually plant.SetPositions works on the whole plant or model instance.
+            # To set single joint:
+            # joint.set_angle(plant_context, angle) is for RevoluteJoint
+            if isinstance(joint, RevoluteJoint):
+                joint.set_angle(plant_context, angle)
+            elif isinstance(joint, PrismaticJoint):
+                joint.set_translation(plant_context, angle)
+
+        diagram.Publish(context)
+
+        # Update overlays
+        if self.visualizer:
+            self.visualizer.update_frame_transforms(context)
+            self.visualizer.update_com_transforms(context)
+
+    def _sync_kinematic_sliders(self) -> None:
+        """Read current plant state and update sliders."""
+        plant = self.plant
+        context = self.context
+        if not plant or not context:
+            return
+
+        plant_context = plant.GetMyContextFromRoot(context)
+
+        for j_idx, spin in self.spinboxes.items():
+            from pydrake.all import JointIndex
+
+            joint = plant.get_joint(JointIndex(j_idx))
+            if joint.num_positions() == 1:
+                val = joint.GetOnePosition(plant_context)
+                spin.setValue(val)
+
+    def _on_mode_changed(self, text: str) -> None:
+        if "Kinematic" in text:
+            self.operating_mode = "kinematic"
+            self.controls_stack.setCurrentIndex(1)
+            self.is_running = False
+            self.btn_run.setChecked(False)
+            self._sync_kinematic_sliders()
+            # Stop physics, allow manual
+        else:
+            self.operating_mode = "dynamic"
+            self.controls_stack.setCurrentIndex(0)
+
+    def _toggle_run(self, checked: bool) -> None:
+        self.is_running = checked
+        self.btn_run.setText("Stop Simulation" if checked else "Run Simulation")
+
+    def _reset_simulation(self) -> None:
+        self.is_running = False
+        self.btn_run.setChecked(False)
+        self.btn_run.setText("Run Simulation")
+        self._reset_state()
+
+    def _game_loop(self) -> None:
+        simulator = self.simulator
+        context = self.context
+        
+        if not simulator or not context:
+            return
+
+        if self.operating_mode == "dynamic" and self.is_running:
+            t = context.get_time()
+            simulator.AdvanceTo(t + self.time_step)
+
+            # Visual update
+            if self.visualizer:
+                self.visualizer.update_frame_transforms(context)
+                self.visualizer.update_com_transforms(context)
+
+        # Force Publish just in case (meshcat handles rate limiting usually)
+        # self.diagram.Publish(self.context) # AdvanceTo publishes.
+
+    def _show_overlay_dialog(self) -> None:
+        """Show dialog to toggle overlays for specific bodies."""
+        plant = self.plant
+        diagram = self.diagram
+        context = self.context
+        visualizer = self.visualizer
+        
+        if not plant or not diagram or not context or not visualizer:
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Manage Overlays")
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        scroll = QtWidgets.QScrollArea()
+        content = QtWidgets.QWidget()
+        c_layout = QtWidgets.QVBoxLayout(content)
+
+        # List all bodies
+        for i in range(plant.num_bodies()):
+            from pydrake.all import BodyIndex
+
+            body = plant.get_body(BodyIndex(i))
+            name = body.name()
+            if name == "world":
+                continue
+
+            b_row = QtWidgets.QHBoxLayout()
+            lbl = QtWidgets.QLabel(name)
+
+            chk_frame = QtWidgets.QCheckBox("Frame")
+            is_vis_f = name in visualizer.visible_frames
+            chk_frame.setChecked(is_vis_f)
+            chk_frame.toggled.connect(
+                lambda c, n=name: visualizer.toggle_frame(n, c)
+            )
+
+            chk_com = QtWidgets.QCheckBox("COM")
+            is_vis_c = name in visualizer.visible_coms
+            chk_com.setChecked(is_vis_c)
+            chk_com.toggled.connect(lambda c, n=name: visualizer.toggle_com(n, c))
+
+            b_row.addWidget(lbl)
+            b_row.addWidget(chk_frame)
+            b_row.addWidget(chk_com)
+            c_layout.addLayout(b_row)
+
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        layout.addWidget(scroll)
+
+        close = QtWidgets.QPushButton("Close")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close)
+
+        dialog.exec()
+
+        # Refresh kinematics to update frame positions immediately
+        if self.operating_mode == "kinematic":
+            diagram.Publish(context)
+
+
+def main() -> None:
+    setup_logging()
+    app = QtWidgets.QApplication(sys.argv)
+    window = DrakeSimApp()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
