@@ -5,3 +5,7 @@
 ## 2024-05-23 - [Optimizing Matrix Construction]
 **Learning:** `np.block` and `np.array` creation for small, fixed-size matrices (like 3x3 or 6x6) has significant overhead. Manual assignment into a pre-allocated `np.zeros` array is much faster (~8x for 6x6 `crm` matrix).
 **Action:** For performance-critical small matrix construction, avoid `np.block` and prefer manual element assignment.
+
+## 2024-05-24 - [Optimizing Spatial Inertia Matrix Construction]
+**Learning:** `np.block` for constructing 6x6 spatial inertia matrices has significant overhead. Manual element assignment into a pre-allocated `np.zeros` array yielded a ~2.8x speedup in `mcI`. Also, `mass * np.eye(3)` creates unnecessary temporary arrays.
+**Action:** Use manual assignment for constructing spatial inertia matrices and avoid temporary identity matrix scaling when possible.
