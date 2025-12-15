@@ -72,8 +72,21 @@ def mcI(
     # I = I_com + m * c× * c×ᵀ
     i_ref = i_com + mass * (c_skew @ c_skew.T)
 
-    # Build the spatial inertia matrix
-    return np.block([[i_ref, mass * c_skew], [mass * c_skew.T, mass * np.eye(3)]])
+    # Performance optimization: manual construction avoids np.block overhead
+    # and temporary array creation for mass * np.eye(3)
+    res = np.zeros((6, 6), dtype=np.float64)
+    res[0:3, 0:3] = i_ref
+
+    mass_c_skew = mass * c_skew
+    res[0:3, 3:6] = mass_c_skew
+    res[3:6, 0:3] = mass_c_skew.T
+
+    # Diagonal mass block
+    res[3, 3] = mass
+    res[4, 4] = mass
+    res[5, 5] = mass
+
+    return res
 
 
 def transform_spatial_inertia(
