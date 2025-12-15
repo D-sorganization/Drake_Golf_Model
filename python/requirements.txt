@@ -42,3 +42,4 @@ qpsolvers
 osqp>=0.6.3
 scs~=3.2.4
 quadprog~=0.1.11
+PyQt6>=6.4.0,<7.0.0

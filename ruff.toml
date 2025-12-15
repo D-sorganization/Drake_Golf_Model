@@ -59,6 +59,9 @@ exclude = [
     "RET504",  # Unnecessary assignment (readability)
     "TID253",  # numpy imports are standard in scientific computing
 ]
+"drake_visualizer.py" = [
+    "N806",    # Variable naming (X_WB, M_B are standard)
+]
 
 [lint.mccabe]
 max-complexity = 10
