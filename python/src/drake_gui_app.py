@@ -303,16 +303,16 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
             self.sliders[j_idx] = slider
             self.spinboxes[j_idx] = spin
 
-    def _on_slider_change(
-        self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int  # type: ignore[no-any-unimported]
+    def _on_slider_change(  # type: ignore[no-any-unimported]
+        self, val: int, spin: QtWidgets.QDoubleSpinBox, joint_idx: int
     ) -> None:
         radian = val * SLIDER_TO_RADIAN
         with QtCore.QSignalBlocker(spin):
             spin.setValue(radian)
         self._update_joint_pos(joint_idx, radian)
 
-    def _on_spin_change(
-        self, val: float, slider: QtWidgets.QSlider, joint_idx: int  # type: ignore[no-any-unimported]
+    def _on_spin_change(  # type: ignore[no-any-unimported]
+        self, val: float, slider: QtWidgets.QSlider, joint_idx: int
     ) -> None:
         with QtCore.QSignalBlocker(slider):
             slider.setValue(int(val / SLIDER_TO_RADIAN))
