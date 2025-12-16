@@ -18,7 +18,7 @@ from pydrake.all import (
     RigidTransform,
     Simulator,
 )
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from .drake_golf_model import GolfModelParams, build_golf_swing_diagram
 from .drake_visualizer import DrakeVisualizer
@@ -195,6 +195,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
         self.mode_combo.setToolTip(
             "Select between physics simulation or manual pose control"
         )
+        self.mode_combo.setStatusTip(
+            "Select between physics simulation or manual pose control"
+        )
         self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
         mode_layout.addWidget(self.mode_combo)
@@ -211,13 +214,17 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
         self.btn_run = QtWidgets.QPushButton("▶ Run Simulation")
         self.btn_run.setCheckable(True)
-        self.btn_run.setToolTip("Start or stop the physics simulation")
+        self.btn_run.setToolTip("Start or stop the physics simulation (Space)")
+        self.btn_run.setStatusTip("Start or stop the physics simulation (Space)")
+        self.btn_run.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space))
         self.btn_run.setStyleSheet(STYLE_BUTTON_RUN)
         self.btn_run.clicked.connect(self._toggle_run)
         dyn_layout.addWidget(self.btn_run)
 
         self.btn_reset = QtWidgets.QPushButton("Reset")
-        self.btn_reset.setToolTip("Reset the simulation to the initial state")
+        self.btn_reset.setToolTip("Reset the simulation to the initial state (Ctrl+R)")
+        self.btn_reset.setStatusTip("Reset the simulation to the initial state (Ctrl+R)")
+        self.btn_reset.setShortcut(QtGui.QKeySequence("Ctrl+R"))
         self.btn_reset.clicked.connect(self._reset_simulation)
         dyn_layout.addWidget(self.btn_reset)
 
@@ -243,6 +250,9 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
         self.btn_overlays = QtWidgets.QPushButton("Manage Body Overlays")
         self.btn_overlays.setToolTip(
+            "Toggle visibility of reference frames and centers of mass"
+        )
+        self.btn_overlays.setStatusTip(
             "Toggle visibility of reference frames and centers of mass"
         )
         self.btn_overlays.clicked.connect(self._show_overlay_dialog)
@@ -289,6 +299,7 @@ class DrakeSimApp(QtWidgets.QMainWindow):  # type: ignore[misc, no-any-unimporte
 
             # Slider
             slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+            label.setBuddy(slider)
             slider.setRange(SLIDER_RANGE_MIN, SLIDER_RANGE_MAX)
             slider.setValue(0)
 

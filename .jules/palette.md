@@ -9,3 +9,7 @@
 ## 2024-05-23 - [Visual Feedback for Desktop Simulation Controls]
 **Learning:** In desktop GUI apps (PyQt) controlling background physics simulations, simply changing button text (Run/Stop) is insufficient for quick status recognition. Adding color-coded states (Green/Red) and a status bar significantly improves the user's ability to instantly parse the system state without reading labels.
 **Action:** Use color encoding and redundant status messages for binary system states (Running/Stopped, Connected/Disconnected).
+
+## 2025-10-27 - [Keyboard Shortcuts for Simulation Control]
+**Learning:** For physics simulations where users frequently start/stop/reset to iterate, mouse interactions become tedious. Adding standard keyboard shortcuts (Space for Toggle, Ctrl+R for Reset) drastically improves the iteration loop speed and feels "pro".
+**Action:** Always map primary simulation actions (Play/Pause, Reset) to standard keyboard shortcuts.
