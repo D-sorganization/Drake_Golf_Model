@@ -9,3 +9,7 @@
 ## 2024-05-24 - [Optimizing Spatial Inertia Matrix Construction]
 **Learning:** `np.block` for constructing 6x6 spatial inertia matrices has significant overhead. Manual element assignment into a pre-allocated `np.zeros` array yielded a ~2.8x speedup in `mcI`. Also, `mass * np.eye(3)` creates unnecessary temporary arrays.
 **Action:** Use manual assignment for constructing spatial inertia matrices and avoid temporary identity matrix scaling when possible.
+
+## 2024-05-25 - [Optimizing Joint Transforms]
+**Learning:** Helper functions like `xrot` that include safety checks (like `np.linalg.det`) are extremely expensive for hot loops. `jcalc` using `xrot` was ~17x slower than a manual implementation that bypasses the check, because `jcalc` already guarantees valid inputs.
+**Action:** In core kinematic functions like `jcalc`, construct transformation matrices manually to avoid overhead from general-purpose helper functions and unnecessary validation checks.

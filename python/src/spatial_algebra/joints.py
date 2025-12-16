@@ -8,7 +8,13 @@ for various joint types.
 import numpy as np
 import numpy.typing as npt
 
-from .transforms import xlt, xrot
+# Pre-allocate motion subspaces (S vectors) to avoid repeated array creation
+S_RX = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+S_RY = np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+S_RZ = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0], dtype=np.float64)
+S_PX = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64)
+S_PY = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0], dtype=np.float64)
+S_PZ = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64)
 
 
 def jcalc(  # noqa: PLR0915
@@ -55,46 +61,65 @@ def jcalc(  # noqa: PLR0915
         >>> s_subspace
         array([0., 0., 0., 1., 0., 0.])
     """
+    # Performance optimization: manually construct matrices to avoid overhead of
+    # intermediate arrays, function calls (xrot/xlt), and determinant checks.
     if jtype == "Rx":  # Revolute about x-axis
         c = np.cos(q)
         s = np.sin(q)
-        e_rot = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
-        xj_transform = xrot(e_rot)
-        s_subspace = np.array([1, 0, 0, 0, 0, 0])  # Angular velocity about x
+        xj_transform = np.zeros((6, 6), dtype=np.float64)
+        # Top-left and bottom-right blocks are E
+        xj_transform[0, 0] = xj_transform[3, 3] = 1.0
+        xj_transform[1, 1] = xj_transform[4, 4] = c
+        xj_transform[1, 2] = xj_transform[4, 5] = -s
+        xj_transform[2, 1] = xj_transform[5, 4] = s
+        xj_transform[2, 2] = xj_transform[5, 5] = c
+        return xj_transform, S_RX
 
     elif jtype == "Ry":  # Revolute about y-axis
         c = np.cos(q)
         s = np.sin(q)
-        e_rot = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
-        xj_transform = xrot(e_rot)
-        s_subspace = np.array([0, 1, 0, 0, 0, 0])  # Angular velocity about y
+        xj_transform = np.zeros((6, 6), dtype=np.float64)
+        xj_transform[1, 1] = xj_transform[4, 4] = 1.0
+        xj_transform[0, 0] = xj_transform[3, 3] = c
+        xj_transform[0, 2] = xj_transform[3, 5] = s
+        xj_transform[2, 0] = xj_transform[5, 3] = -s
+        xj_transform[2, 2] = xj_transform[5, 5] = c
+        return xj_transform, S_RY
 
     elif jtype == "Rz":  # Revolute about z-axis
         c = np.cos(q)
         s = np.sin(q)
-        e_rot = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-        xj_transform = xrot(e_rot)
-        s_subspace = np.array([0, 0, 1, 0, 0, 0])  # Angular velocity about z
+        xj_transform = np.zeros((6, 6), dtype=np.float64)
+        xj_transform[2, 2] = xj_transform[5, 5] = 1.0
+        xj_transform[0, 0] = xj_transform[3, 3] = c
+        xj_transform[0, 1] = xj_transform[3, 4] = -s
+        xj_transform[1, 0] = xj_transform[4, 3] = s
+        xj_transform[1, 1] = xj_transform[4, 4] = c
+        return xj_transform, S_RZ
 
     elif jtype == "Px":  # Prismatic along x-axis
-        r = np.array([q, 0, 0])
-        xj_transform = xlt(r)
-        s_subspace = np.array([0, 0, 0, 1, 0, 0])  # Linear velocity along x
+        xj_transform = np.eye(6, dtype=np.float64)
+        # -skew([q, 0, 0]) -> [0, 0, 0; 0, 0, q; 0, -q, 0]
+        xj_transform[4, 2] = q
+        xj_transform[5, 1] = -q
+        return xj_transform, S_PX
 
     elif jtype == "Py":  # Prismatic along y-axis
-        r = np.array([0, q, 0])
-        xj_transform = xlt(r)
-        s_subspace = np.array([0, 0, 0, 0, 1, 0])  # Linear velocity along y
+        xj_transform = np.eye(6, dtype=np.float64)
+        # -skew([0, q, 0]) -> [0, 0, -q; 0, 0, 0; q, 0, 0]
+        xj_transform[3, 2] = -q
+        xj_transform[5, 0] = q
+        return xj_transform, S_PY
 
     elif jtype == "Pz":  # Prismatic along z-axis
-        r = np.array([0, 0, q])
-        xj_transform = xlt(r)
-        s_subspace = np.array([0, 0, 0, 0, 0, 1])  # Linear velocity along z
+        xj_transform = np.eye(6, dtype=np.float64)
+        # -skew([0, 0, q]) -> [0, q, 0; -q, 0, 0; 0, 0, 0]
+        xj_transform[3, 1] = q
+        xj_transform[4, 0] = -q
+        return xj_transform, S_PZ
 
     else:
         msg = (
             f"Unsupported joint type: {jtype}. Supported types: Rx, Ry, Rz, Px, Py, Pz"
         )
         raise ValueError(msg)
-
-    return xj_transform, s_subspace
